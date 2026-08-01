@@ -11,6 +11,7 @@
 		"deploy": "npm run build && wrangler deploy"
 	},
 	"dependencies": {
+		"@clerk/react": "^6.12.10",
 		"react": "^19.2.7",
 		"react-dom": "^19.2.7",
 		"react-router": "^8.3.0"

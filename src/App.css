@@ -1,15 +1,36 @@
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+}
+#root {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+nav {
+    display: flex;
+    gap: 10px;
+    
+   
+}
 .navlink {
     padding: 10px;
     text-decoration: none;
-    color: lightgreen;
+    color: black;
 
     &.active {
         background-color: black;
+        color: white;
         pointer-events: none;
     }
     
     &:hover {
         background-color: black;
+        color: white;
     }
     
 }
