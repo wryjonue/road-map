@@ -1,21 +1,34 @@
 import { useState } from 'react'
-import './App.css'
+import './style.css'
 import { createBrowserRouter, Link, NavLink, Outlet } from "react-router";
 import { Show, SignIn, SignUp, UserButton } from '@clerk/react'
 import { RouterProvider } from "react-router/dom";
 
+function Header() {
+	return (
+		<>
+			<div className="header">
+				<div className="logo">
+					Logo
+				</div>
+				<div className="header-auth-container">
+					<Show when="signed-out">
+						<Link to="/sign-in">Sign in</Link>
+					</Show>
+					<Show when="signed-in">
+						<UserButton />
+					</Show>
+				</div>
+			</div>
+		</>
+	);
+}
+
 function Home() {
 	return (
 		<>
-			<header>
-				<Show when="signed-out">
-					<Link to="/sign-in">Sign in</Link>
-				</Show>
-				<Show when="signed-in">
-					<UserButton />
-				</Show>
-			</header>
-    </>
+			Hakdog
+    	</>
 	);
 }
 function About() {
@@ -40,11 +53,18 @@ function RootLayout() {
 	const [name, setName] = useState('Click to know');
 	return (
 		<>
+			<Header/>
 			<nav>
 				<NavLink className="navlink" to="/">Home</NavLink>
 				<NavLink className="navlink" to="/about">About</NavLink>
 			</nav>
 			<button
+				style={{
+					display: 'block',
+					position: 'absolute',
+					bottom: '0'
+					
+				}}
 				onClick={async () => {
 					const res = await fetch("/api/");
 					const body = await res.text();
