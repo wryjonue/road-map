@@ -16,6 +16,13 @@
 	"upload_source_maps": true,
 	"compatibility_flags": [
 		"nodejs_compat"
+	],
+	"d1_databases": [
+		{
+			"binding": "road_map_db",
+			"database_name": "road-map-db",
+			"database_id": "9003c4a5-0cce-48c5-808c-dd6fef540539"
+		}
 	]
 	/**
 	 * Smart Placement
