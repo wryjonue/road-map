@@ -1,0 +1,3 @@
+.mapCard { padding: 20px; }
+.mapCanvas { width: 100%; height: 480px; border-radius: 18px; overflow: hidden; border: 1px solid var(--border); background: #dfe7d5; }
+@media (max-width: 720px) { .mapCanvas { height: 360px; } }

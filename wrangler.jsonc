@@ -23,6 +23,12 @@
 			"database_name": "road-map-db",
 			"database_id": "9003c4a5-0cce-48c5-808c-dd6fef540539"
 		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "ROAD_MAP_MEDIA",
+			"bucket_name": "road-map-media"
+		}
 	]
 	/**
 	 * Smart Placement

@@ -1,13 +1,26 @@
-import { insertNameToTestTable } from "./try.js";
+import { createReport, getMedia, getReport, listReports } from './report-service.js';
 
 export default {
-	fetch(request, env) {
+	async fetch(request, env) {
 		const url = new URL(request.url);
-
-		if (url.pathname.startsWith("/api/")) {
-			return insertNameToTestTable("Cloudflare", env);
+		try {
+			const mediaMatch = url.pathname.match(/^\/api\/media\/(.+)$/);
+			if (mediaMatch) {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				return getMedia(request, env, decodeURIComponent(mediaMatch[1]));
+			}
+			const reportMatch = url.pathname.match(/^\/api\/reports\/?(\d+)?$/);
+			if (!reportMatch) return Response.json({ error: 'Route not found' }, { status: 404 });
+			if (reportMatch[1]) {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				return getReport(env, Number(reportMatch[1]));
+			}
+			if (request.method === 'GET') return listReports(env, url);
+			if (request.method === 'POST') return createReport(request, env);
+			return Response.json({ error: 'Method not allowed' }, { status: 405 });
+		} catch (error) {
+			console.error(error);
+			return Response.json({ error: 'Internal server error' }, { status: 500 });
 		}
-
-		return new Response(null, { status: 404 });
 	},
-}
+};

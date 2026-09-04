@@ -1,0 +1,18 @@
+.page { display: grid; gap: 24px; }
+.heading h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.05; }
+.heading p:last-child { margin: 12px 0 0; color: var(--muted); line-height: 1.6; }
+.form { display: grid; gap: 24px; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.field { display: grid; gap: 8px; color: var(--text); font-weight: 600; }
+.field span { color: var(--muted); font-size: .88rem; }
+.field input, .field select, .field textarea { width: 100%; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-soft); color: var(--text); padding: 12px 14px; outline: none; }
+.field textarea { resize: vertical; min-height: 130px; line-height: 1.5; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: rgba(47,79,47,.38); box-shadow: 0 0 0 4px rgba(47,79,47,.08); }
+.fullWidth { grid-column: 1 / -1; }
+.preview { width: min(240px, 100%); max-height: 180px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); }
+.locationSection { display: grid; gap: 14px; }.locationHeading { display: flex; justify-content: space-between; align-items: end; gap: 16px; }.locationHeading h2 { margin: 0; font-size: 1.35rem; }.locationHeading p { margin: 6px 0 0; color: var(--muted); }.loading { color: var(--warning); font-size: .9rem; font-weight: 600; white-space: nowrap; }
+.map { width: 100%; height: 440px; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: #dfe7d5; }
+.warning { padding: 12px 14px; border: 1px solid rgba(200,93,61,.25); border-radius: 12px; background: rgba(200,93,61,.1); color: var(--danger); line-height: 1.5; }
+.address { display: grid; gap: 4px; padding: 14px; border-radius: 12px; background: var(--primary-soft); border: 1px solid var(--border); }.address span { color: var(--text); }.address small { color: var(--muted); }
+.actions { display: flex; justify-content: flex-end; gap: 12px; }
+@media (max-width: 720px) { .fields { grid-template-columns: 1fr; }.fullWidth { grid-column: auto; }.locationHeading { align-items: start; flex-direction: column; }.map { height: 360px; }.actions { flex-direction: column-reverse; }.actions button { width: 100%; } }

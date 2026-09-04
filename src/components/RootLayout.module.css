@@ -1,0 +1,24 @@
+.appShell {
+	width: min(1200px, calc(100% - 32px));
+	margin: 0 auto;
+	padding: 24px 0 48px;
+}
+
+.topNav {
+	display: flex;
+	gap: 12px;
+	margin: 18px 0 24px;
+	flex-wrap: wrap;
+}
+
+.mainContent {
+	display: grid;
+	gap: 20px;
+}
+
+@media (max-width: 720px) {
+	.appShell {
+		width: min(100% - 20px, 1200px);
+		padding-top: 12px;
+	}
+}

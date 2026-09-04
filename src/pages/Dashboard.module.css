@@ -1,0 +1,14 @@
+.dashboardPage { display: grid; gap: 20px; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.header h1 { margin: 0; font-size: clamp(2.2rem, 4vw, 3.5rem); line-height: 1.05; letter-spacing: -0.04em; }
+.analyticsGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.statCard { background: linear-gradient(180deg, var(--panel-soft), rgba(255,255,255,.9)); border: 1px solid var(--border); border-radius: 18px; padding: 18px 20px; display: grid; gap: 8px; }
+.statCard span, .metricLabel { color: var(--muted); font-size: .92rem; }
+.statCard strong { font-size: clamp(1.6rem, 3vw, 2.4rem); color: var(--primary-dark); }
+.statCard em { color: var(--success); font-style: normal; font-size: .82rem; }
+.panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.panel { background: rgba(255,255,255,.9); border: 1px solid var(--border); border-radius: 20px; padding: 20px; }
+.panel h3 { margin: 0 0 18px; font-size: 1.15rem; }
+.metricList { display: grid; gap: 16px; }.metricRow { display: grid; gap: 8px; }.metricLabel { display: flex; justify-content: space-between; gap: 12px; }.metricBar { width: 100%; height: 10px; background: rgba(47,79,47,.08); border-radius: 999px; overflow: hidden; }.metricFill { height: 100%; border-radius: inherit; }.secondaryFill { background: linear-gradient(135deg, var(--primary), #5d7d60); }.tablePanel { padding-bottom: 12px; }
+@media (max-width: 980px) { .analyticsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .panels { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .header { flex-direction: column; align-items: stretch; } .analyticsGrid { grid-template-columns: 1fr; } }
