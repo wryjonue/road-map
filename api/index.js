@@ -1,4 +1,5 @@
 import { createReport, getMedia, getReport, listReports } from './report-service.js';
+import { requireUser } from './auth.js';
 
 export default {
 	async fetch(request, env) {
@@ -16,7 +17,11 @@ export default {
 				return getReport(env, Number(reportMatch[1]));
 			}
 			if (request.method === 'GET') return listReports(env, url);
-			if (request.method === 'POST') return createReport(request, env);
+			if (request.method === 'POST') {
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				return createReport(request, env, auth);
+			}
 			return Response.json({ error: 'Method not allowed' }, { status: 405 });
 		} catch (error) {
 			console.error(error);

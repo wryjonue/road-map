@@ -11,6 +11,7 @@
 		"deploy": "npm run build && wrangler deploy"
 	},
 	"dependencies": {
+		"@clerk/backend": "^3.17.1",
 		"@clerk/react": "^6.12.10",
 		"maplibre-gl": "^6.1.0",
 		"react": "^19.2.7",

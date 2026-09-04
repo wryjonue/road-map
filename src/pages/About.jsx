@@ -3,8 +3,8 @@ import styles from './About.module.css';
 export default function About() {
 	return (
 		<div className={`page-card ${styles.aboutPage}`}>
-			<h1>Safer roads through shared visibility</h1>
-			<p>RoadMap empowers cities and citizens to build safer roads through real-time hazard tracking and streamlined traffic violation enforcement.</p>
+			<h1>Monitoring roads.</h1>
+			<p>RoadMap empowers Bataan and Bataenos to build safer roads through real-time hazard tracking and streamlined traffic violation enforcement.</p>
 			<div className={styles.teamGrid}><div>Incident Monitoring</div><div>Traffic Enforcement</div><div>Violation Ticketing</div><div>Geospatial Mapping</div></div>
 			<div className={styles.aboutGrid}>
 				<div className={styles.aboutCard}><h3>Citizen hazard reporting</h3><p>Residents and field teams can report blocked routes, flooding, debris, outages, and dangerous road conditions for quick review and response.</p></div>

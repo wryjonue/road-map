@@ -84,7 +84,8 @@ Place new route-level UI in `src/pages/`, reusable UI in `src/components/`, and 
 
 - The Feed and report creation flow use the Worker API with D1 and R2.
 - Dashboard metrics and ticket records are still demo or in-memory data unless explicitly migrated.
-- Clerk authentication UI is present, but server-side API token verification and authorization must be added before treating client identity fields as trusted.
+- Clerk authentication UI and server-side token verification are present for report creation. Keep `CLERK_JWT_KEY` or `CLERK_SECRET_KEY` in Worker secrets and derive `author_id` from verified claims.
+- The local `mock-user-local` fallback requires `ALLOW_LOCAL_MOCK_AUTH=true` and the `X-Local-Mock-Auth: true` header; never enable it in production.
 - Search, voting, comments, and persistent ticket workflows may be incomplete; inspect the current implementation before extending them.
 - Local development uses Wrangler/Vite bindings and local D1/R2 state. Remote migrations and deployments require deliberate confirmation.
 
@@ -111,6 +112,7 @@ Cloudflare resource commands:
 npx wrangler r2 bucket list
 npx wrangler r2 bucket create road-map-media
 npx wrangler secret put GEOAPIFY_API_KEY
+npx wrangler secret put CLERK_JWT_KEY
 ```
 
 Use `--remote` only when explicitly authorized. Never print or commit secret values. Before finishing a change, run at least `npm run lint` and `npm run build`, plus focused D1/API checks when backend behavior changes.

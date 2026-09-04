@@ -1,0 +1,8 @@
+# Copy to .dev.vars for local Worker development. Never commit the populated file.
+GEOAPIFY_API_KEY=replace-with-your-key
+CLERK_JWT_KEY=replace-with-your-clerk-jwt-public-key
+# Comma-separated origins allowed in Clerk's azp claim.
+CLERK_AUTHORIZED_PARTIES=http://localhost:5173,http://127.0.0.1:5173
+# Set to true only for explicit local mock testing without Clerk sign-in.
+ALLOW_LOCAL_MOCK_AUTH=false
+ENVIRONMENT=development

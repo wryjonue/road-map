@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useUser } from '@clerk/react';
+import { useAuth, useUser } from '@clerk/react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import categories from '../data/categories';
@@ -21,8 +21,9 @@ export default function CreateReportPage() {
 	const navigate = useNavigate();
 	const mapContainer = useRef(null);
 	const requestController = useRef(null);
+	const { getToken } = useAuth();
 	const { user } = useUser();
-	const [form, setForm] = useState({ title: '', description: '', category: categories[0] });
+	const [form, setForm] = useState({ title: '', description: '', categoryId: categories[0].id });
 	const [location, setLocation] = useState(initialLocation);
 	const [locationError, setLocationError] = useState('');
 	const [isResolving, setIsResolving] = useState(false);
@@ -100,10 +101,11 @@ export default function CreateReportPage() {
 		}
 		setIsSubmitting(true);
 		try {
+			const token = await getToken();
 			const payload = new FormData();
 			payload.append('title', form.title);
 			payload.append('description', form.description);
-			payload.append('categoryId', String(categories.indexOf(form.category) + 1));
+			payload.append('categoryId', String(form.categoryId));
 			payload.append('authorId', user?.id || 'mock-user-local');
 			payload.append('authorName', user?.fullName || user?.username || 'Local Reporter');
 			payload.append('barangay', location.barangay);
@@ -115,6 +117,7 @@ export default function CreateReportPage() {
 			if (image) payload.append('image', image);
 			const response = await fetch('/api/reports', {
 				method: 'POST',
+				headers: token ? { Authorization: `Bearer ${token}` } : { 'X-Local-Mock-Auth': 'true' },
 				body: payload,
 			});
 			const data = await response.json();
@@ -135,7 +138,7 @@ export default function CreateReportPage() {
 			<form className={styles.form} onSubmit={handleSubmit}>
 				<div className={styles.fields}>
 					<label className={styles.field}><span>Post Title</span><input type="text" value={form.title} onChange={(event) => updateField('title', event.target.value)} required /></label>
-					<label className={styles.field}><span>Category</span><select value={form.category} onChange={(event) => updateField('category', event.target.value)}>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
+					<label className={styles.field}><span>Category</span><select value={form.categoryId} onChange={(event) => updateField('categoryId', Number(event.target.value))}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
 					<label className={`${styles.field} ${styles.fullWidth}`}><span>Post Description</span><textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} rows="5" required /></label>
 					<label className={`${styles.field} ${styles.fullWidth}`}><span>Image (optional)</span><input type="file" accept="image/*" onChange={handleImageChange} />{imagePreview && <img className={styles.preview} src={imagePreview} alt="Selected incident" />}</label>
 				</div>

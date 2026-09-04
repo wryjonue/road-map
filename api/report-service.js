@@ -1,6 +1,7 @@
 const MAX_PAGE_SIZE = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
-const VALID_STATUSES = new Set(['Open', 'Pending', 'Resolved', 'Closed', 'Rejected']);
+const MAX_REQUEST_SIZE = MAX_IMAGE_SIZE + 256 * 1024;
+const GEOAPIFY_TIMEOUT = 10000;
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 const REPORT_SELECT = `
 	SELECT r.id, r.title, r.description, r.author_id, r.author_name, r.status,
@@ -18,7 +19,7 @@ function toReport(row, images = []) {
 		id: row.id, title: row.title, description: row.description, authorId: row.author_id, authorName: row.author_name,
 		category: { id: row.category_id, name: row.category_name, slug: row.category_slug }, status: row.status,
 		imageUrl: row.image_url ? mediaUrl(row.image_url) : null,
-		images: images.map((image) => ({ id: image.id, url: mediaUrl(image.r2_key), fileName: image.file_name, contentType: image.content_type })),
+		images: images.filter((image) => image.r2_key).map((image) => ({ id: image.id, url: mediaUrl(image.r2_key), fileName: image.file_name, contentType: image.content_type })),
 		staticMapUrl: row.static_map_r2_key ? mediaUrl(row.static_map_r2_key) : row.static_map_url,
 		location: { barangay: row.barangay, city: row.city, province: row.province, resolvedAddress: row.resolved_address, longitude: row.longitude, latitude: row.latitude },
 		barangay: row.barangay, city: row.city, province: row.province, resolvedAddress: row.resolved_address,
@@ -61,21 +62,27 @@ function extension(contentType) { return ({ 'image/jpeg': 'jpg', 'image/png': 'p
 async function createStaticMap(env, reportId, longitude, latitude) {
 	if (!env.GEOAPIFY_API_KEY) throw new Error('GEOAPIFY_API_KEY is not configured');
 	const params = new URLSearchParams({ style: 'osm-bright-smooth', width: '1000', height: '600', center: `lonlat:${longitude},${latitude}`, zoom: '12', marker: `lonlat:${longitude},${latitude}`, apiKey: env.GEOAPIFY_API_KEY });
-	const response = await fetch(`https://maps.geoapify.com/v1/staticmap?${params}`);
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), GEOAPIFY_TIMEOUT);
+	let response;
+	try { response = await fetch(`https://maps.geoapify.com/v1/staticmap?${params}`, { signal: controller.signal }); } finally { clearTimeout(timeout); }
 	if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) throw new Error('Geoapify static map generation failed');
 	const key = `reports/${reportId}/static-map.png`; await env.ROAD_MAP_MEDIA.put(key, await response.arrayBuffer(), { httpMetadata: { contentType: response.headers.get('content-type') } }); return key;
 }
-export async function createReport(request, env) {
+export async function createReport(request, env, auth) {
+	const contentLength = Number(request.headers.get('Content-Length'));
+	if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_SIZE) return errorResponse('Request is too large');
 	let body; try { body = await parseBody(request); } catch { return errorResponse('Request body must be valid JSON or multipart form data'); }
-	const title = typeof body.title === 'string' ? body.title.trim() : ''; const description = typeof body.description === 'string' ? body.description.trim() : ''; const authorId = typeof body.authorId === 'string' ? body.authorId.trim() : ''; const province = typeof body.province === 'string' ? body.province.trim() : ''; const longitude = Number(body.longitude); const latitude = Number(body.latitude); const categoryId = Number(body.categoryId);
-	if (!title) return errorResponse('title is required'); if (!description) return errorResponse('description is required'); if (!authorId) return errorResponse('authorId is required'); if (!Number.isInteger(categoryId) || categoryId < 1) return errorResponse('categoryId must be a positive integer'); if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return errorResponse('longitude must be between -180 and 180'); if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return errorResponse('latitude must be between -90 and 90'); if (province.toLowerCase() !== 'bataan') return errorResponse('Reports are limited to the Province of Bataan'); if (body.status && !VALID_STATUSES.has(body.status)) return errorResponse('status is invalid');
+	const title = typeof body.title === 'string' ? body.title.trim() : ''; const description = typeof body.description === 'string' ? body.description.trim() : ''; const province = typeof body.province === 'string' ? body.province.trim() : ''; const longitude = Number(body.longitude); const latitude = Number(body.latitude); const categoryId = Number(body.categoryId);
+	if (!title) return errorResponse('title is required'); if (!description) return errorResponse('description is required'); if (title.length > 160) return errorResponse('title must be 160 characters or fewer'); if (description.length > 5000) return errorResponse('description must be 5000 characters or fewer'); if (!Number.isInteger(categoryId) || categoryId < 1) return errorResponse('categoryId must be a positive integer'); if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return errorResponse('longitude must be between -180 and 180'); if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return errorResponse('latitude must be between -90 and 90'); if (province.toLowerCase() !== 'bataan') return errorResponse('Reports are limited to the Province of Bataan'); if (longitude < 120.15 || longitude > 120.75 || latitude < 14.25 || latitude > 15.05) return errorResponse('Coordinates must be inside the Province of Bataan');
 	const category = await env.road_map_db.prepare('SELECT id FROM categories WHERE id = ?').bind(categoryId).first(); if (!category) return errorResponse('categoryId does not reference an existing category');
 	const image = body.image;
 	if (image && (typeof image.type !== 'string' || !IMAGE_TYPES.has(image.type))) return errorResponse('image must be a JPEG, PNG, GIF, or WebP file');
 	if (image && image.size > MAX_IMAGE_SIZE) return errorResponse('image must be 5 MB or smaller');
 	let reportId; let imageKey; let staticMapKey;
 	try {
-		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, author_name, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)').bind(title, description, authorId, body.authorName ?? null, categoryId, body.status || 'Open', body.barangay ?? null, body.city ?? null, province, body.resolvedAddress ?? null, longitude, latitude).run();
+		const authorName = auth.isMock ? body.authorName ?? null : null;
+		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, author_name, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, authorName, categoryId, 'Open', body.barangay ?? null, body.city ?? null, province, body.resolvedAddress ?? null, longitude, latitude).run();
 		reportId = result.meta.last_row_id;
 		if (image) { imageKey = `reports/${reportId}/images/${crypto.randomUUID()}.${extension(image.type)}`; await env.ROAD_MAP_MEDIA.put(imageKey, image.stream(), { httpMetadata: { contentType: image.type }, customMetadata: { fileName: image.name || 'upload' } }); await env.road_map_db.prepare('INSERT INTO report_images (report_id, image_url, r2_key, content_type, file_name, file_size) VALUES (?, ?, ?, ?, ?, ?)').bind(reportId, imageKey, imageKey, image.type, image.name || null, image.size).run(); }
 		staticMapKey = await createStaticMap(env, reportId, longitude, latitude); await env.road_map_db.prepare('UPDATE reports SET static_map_r2_key = ?, static_map_url = ? WHERE id = ?').bind(staticMapKey, mediaUrl(staticMapKey), reportId).run();
