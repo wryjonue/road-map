@@ -7,6 +7,9 @@
 	"name": "road-map",
 	"main": "api/index.js",
 	"compatibility_date": "2026-08-01",
+	"vars": {
+		"VITE_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsucm9hZC1tYXAud3J5am9udWUud29ya2Vycy5kZXYk"
+	},
 	"assets": {
 		"not_found_handling": "single-page-application"
 	},
