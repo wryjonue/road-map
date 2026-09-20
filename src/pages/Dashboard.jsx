@@ -13,7 +13,7 @@ const breakdown = [
 ];
 const resolutionRates = [{ label: 'Hazard', value: 82 }, { label: 'Traffic', value: 74 }, { label: 'Case', value: 68 }];
 const recentActivity = [
-	{ type: 'Violation', summary: 'Lorem-Ipsum · Lorem-Ipsum', status: 'Lorem', time: '2m ago' },
+	{ type: 'Violation', summary: 'Lorem-Ipsum · Lorem-Ipsum', status: 'Open', time: '2m ago' },
 	{ type: 'Incident', summary: 'The quick brown fox', status: 'Open', time: '18m ago' },
 	{ type: 'Violation', summary: '0-8897 · Yes', status: 'Issued', time: '43m ago' },
 	{ type: 'Incident', summary: '0 · Mama Mo Blue', status: 'Resolved', time: '1h ago' },
