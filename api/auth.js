@@ -16,6 +16,8 @@ export async function requireUser(request, env) {
 
 	if (!env.CLERK_JWT_KEY && !env.CLERK_SECRET_KEY) {
 		return Response.json({ error: 'Clerk verification is not configured' }, { status: 503 });
+	} else {
+		console.log("Something");
 	}
 	if (!env.CLERK_AUTHORIZED_PARTIES) {
 		return Response.json({ error: 'Clerk authorized parties are not configured' }, { status: 503 });
