@@ -1,10 +1,15 @@
 import { createReport, getMedia, getReport, listReports } from './report-service.js';
+import { getSampleRoute } from './routing-service.js';
 import { requireUser } from './auth.js';
 
 export default {
 	async fetch(request, env) {
 		const url = new URL(request.url);
 		try {
+			if (url.pathname === '/api/routes/sample') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				return getSampleRoute(request, env);
+			}
 			const mediaMatch = url.pathname.match(/^\/api\/media\/(.+)$/);
 			if (mediaMatch) {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });

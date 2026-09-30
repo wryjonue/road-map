@@ -48,6 +48,7 @@ export default function CreateReportPage() {
 
 		const resolveLocation = async () => {
 			const { lat, lng } = marker.getLngLat();
+			console.log('Current Marker Coordinates:', { lat, lng });
 			setIsResolving(true);
 			setLocationError('');
 			requestController.current?.abort();
