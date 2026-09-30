@@ -10,7 +10,7 @@
 	"vars": {
 		"CLERK_AUTHORIZED_PARTIES": "https://roadmap.vieryn.party",
 		"ALLOW_LOCAL_MOCK_AUTH": "false",
-		"VITE_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsucm9hZC1tYXAud3J5am9udWUud29ya2Vycy5kZXYk"
+		"VITE_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsucm9hZG1hcC52aWVyeW4ucGFydHkk"
 	},
 	"assets": {
 		"not_found_handling": "single-page-application"

@@ -1,8 +1,13 @@
+import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import Header from './Header';
 import styles from './RootLayout.module.css';
 
 export default function RootLayout() {
+	useEffect(() => {
+		console.info('[clerk-diag] root layout mounted');
+	}, []);
+
 	return (
 		<div className={styles.appShell}>
 			<Header />
