@@ -145,7 +145,7 @@ export default function CreateReportPage() {
 				</div>
 
 				<div className={styles.locationSection}><div className={styles.locationHeading}><div><h2>Incident location</h2><p>Drag the marker to the incident. The address will be resolved automatically.</p></div>{isResolving && <span className={styles.loading}>Resolving address...</span>}</div><div ref={mapContainer} className={styles.map} />{locationError && <div className={styles.warning} role="alert">{locationError}</div>}{location.address && <div className={styles.address}><strong>Resolved address</strong><span>{location.address}</span><small>{location.barangay || 'Barangay unavailable'} · {location.city || 'Municipality unavailable'} · {location.province}</small></div>}</div>
-				<div className={styles.actions}><button type="button" className="ghost-btn" onClick={() => navigate('/feed')}>Cancel</button><button type="submit" className="primary-btn" disabled={isSubmitting || isResolving}>{isSubmitting ? 'Submitting...' : 'Submit Report'}</button></div>
+				<div className={styles.actions}><button type="button" className="ghost-btn danger-btn" onClick={() => navigate('/feed')}>Cancel</button><button type="submit" className="primary-btn" disabled={isSubmitting || isResolving}>{isSubmitting ? 'Submitting...' : 'Submit Report'}</button></div>
 			</form>
 		</section>
 	);

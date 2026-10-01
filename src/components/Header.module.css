@@ -4,10 +4,9 @@
 	justify-content: space-between;
 	gap: 16px;
 	padding: 18px 20px;
-	background: rgba(255, 255, 255, 0.72);
-	backdrop-filter: blur(12px);
-	border: 1px solid var(--border);
-	border-radius: 18px;
+	background: var(--surface);
+	border: 2px solid var(--border);
+	border-radius: 3px;
 	box-shadow: var(--shadow);
 }
 
@@ -17,20 +16,19 @@
 	gap: 12px;
 	flex-grow: 1;
 	font-weight: 700;
-	letter-spacing: 0.02em;
-	color: var(--primary-dark);
+	color: var(--text);
 }
 
 .logoMark {
 	width: 36px;
 	height: 36px;
-	border-radius: 12px;
+	border: 2px solid var(--border);
+	border-radius: 3px;
 	display: grid;
 	place-items: center;
-	background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+	background: var(--primary);
 	color: white;
 	font-size: 1rem;
-	box-shadow: 0 8px 18px rgba(47, 79, 47, 0.22);
 }
 
 .authContainer {

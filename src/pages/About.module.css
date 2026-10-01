@@ -5,7 +5,7 @@
 
 .aboutPage h1 {
     margin: 0;
-    font-size: clamp(2rem, 4vw, 3rem);
+    font-size: 2.75rem;
 }
 
 .aboutPage>p,
@@ -23,10 +23,10 @@
 }
 
 .teamGrid div {
-    background: var(--primary-soft);
-    color: var(--primary-dark);
-    border: 1px solid var(--border);
-    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    border: 2px solid var(--border);
+    border-radius: 3px;
     padding: 10px 14px;
     font-weight: 600;
 }
@@ -39,10 +39,11 @@
 }
 
 .aboutCard {
-    background: rgba(255, 255, 255, .9);
-    border: 1px solid var(--border);
-    border-radius: 18px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 3px;
     padding: 18px;
+    box-shadow: var(--shadow);
 }
 
 .aboutCard h3 {
@@ -52,5 +53,11 @@
 @media (max-width: 980px) {
     .aboutGrid {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 720px) {
+    .aboutPage h1 {
+        font-size: 2rem;
     }
 }

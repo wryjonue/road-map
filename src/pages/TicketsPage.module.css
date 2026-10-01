@@ -12,16 +12,15 @@
 
 .header h1 {
     margin: 0;
-    font-size: clamp(2.2rem, 4vw, 3.5rem);
+    font-size: 2.75rem;
     line-height: 1.05;
-    letter-spacing: -0.04em;
 }
 
 .tableWrap {
     overflow-x: auto;
-    border-radius: 18px;
-    border: 1px solid var(--border);
-    background: rgba(255, 255, 255, .8);
+    border-radius: 3px;
+    border: 2px solid var(--border);
+    background: var(--surface);
 }
 
 .tableActions {
@@ -43,10 +42,10 @@
 .modal {
     width: min(680px, 100%);
     background: white;
-    border-radius: 24px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, .18);
-    border: 1px solid var(--border);
+    border-radius: 3px;
+    border: 2px solid var(--border);
     padding: 24px;
+    box-shadow: var(--shadow);
 }
 
 .modalHeader {
@@ -63,10 +62,13 @@
 }
 
 .closeButton {
-    border: none;
-    background: transparent;
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface);
     font-size: 1.8rem;
-    color: var(--muted);
+    color: var(--danger);
     cursor: pointer;
 }
 
@@ -97,17 +99,17 @@
 .field select {
     width: 100%;
     padding: 12px 14px;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    background: var(--panel-soft);
+    border-radius: 3px;
+    border: 2px solid var(--border);
+    background: var(--surface);
     color: var(--text);
     outline: none;
 }
 
 .field input:focus,
 .field select:focus {
-    border-color: rgba(47, 79, 47, .38);
-    box-shadow: 0 0 0 4px rgba(47, 79, 47, .08);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 .modalActions {
@@ -131,5 +133,9 @@
 
     .modalActions {
         flex-direction: column-reverse;
+    }
+
+    .header h1 {
+        font-size: 2rem;
     }
 }
