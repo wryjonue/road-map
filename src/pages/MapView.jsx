@@ -27,42 +27,7 @@ export default function MapView() {
 		const controller = new AbortController();
 
 		map.once('load', () => {
-			const parameters = new URLSearchParams({
-				start: `${sampleRoute.start.lat},${sampleRoute.start.lng}`,
-				end: `${sampleRoute.end.lat},${sampleRoute.end.lng}`,
-			});
-
-			void fetch(`/api/routes/sample?${parameters}`, { signal: controller.signal })
-				.then(async (response) => {
-					if (!response.ok) throw new Error(`Sample route request failed (${response.status})`);
-					return response.json();
-				})
-				.then((routeData) => {
-					if (!routeData.features?.length) throw new Error('No route geometry was returned');
-
-					map.addSource('sample-road-route', { type: 'geojson', data: routeData });
-					const firstSymbolLayer = map.getStyle().layers?.find((layer) => layer.type === 'symbol');
-					map.addLayer({
-						id: 'sample-road-route-line',
-						type: 'line',
-						source: 'sample-road-route',
-						layout: { 'line-cap': 'round', 'line-join': 'round' },
-						paint: { 'line-color': '#e14f35', 'line-width': 7, 'line-opacity': 0.9 },
-					}, firstSymbolLayer?.id);
-
-					const bounds = new maplibregl.LngLatBounds();
-					for (const feature of routeData.features) {
-						const geometry = feature.geometry;
-						const lines = geometry?.type === 'LineString' ? [geometry.coordinates] : geometry?.coordinates;
-						for (const line of lines ?? []) {
-							for (const coordinate of line) bounds.extend(coordinate);
-						}
-					}
-					if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 48, maxZoom: 16 });
-				})
-				.catch((error) => {
-					if (error.name !== 'AbortError') console.error('[map] Failed to load sample route', error);
-				});
+			
 		});
 
 		return () => {

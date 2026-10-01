@@ -36,7 +36,7 @@ export default function FeedPage() {
 			{isLoading && reports.length === 0 && <p className={styles.state}>Loading reports...</p>}
 			{error && <p className={styles.error} role="alert">{error}</p>}
 			{!isLoading && !error && reports.length === 0 && <p className={styles.state}>No reports found.</p>}
-			{reports.length > 0 && <div className={styles.list}>{reports.map((report) => <ReportPostCard key={report.id} {...report} poster={report.authorName || report.authorId} date={report.createdAt} votes={report.voteCount} comments={report.commentCount} />)}</div>}
+			{reports.length > 0 && <div className={styles.list}>{reports.map((report) => <ReportPostCard key={report.id} {...report} poster={report.authorName || report.authorName} date={report.createdAt} votes={report.voteCount} comments={report.commentCount} />)}</div>}
 			{pagination.hasMore && <button type="button" className={`primary-btn ${styles.loadMore}`} onClick={() => loadReports(pagination.offset + pagination.limit, true)} disabled={isLoading}>{isLoading ? 'Loading...' : 'Load More'}</button>}
 		</section>
 	);
