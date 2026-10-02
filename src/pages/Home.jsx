@@ -1,7 +1,11 @@
 import { Link } from 'react-router';
+import { canManageReports, useAppRole } from '../auth/roles';
 import styles from './Home.module.css';
 
 export default function Home() {
+	const { isLoaded, role } = useAppRole();
+	const canViewTickets = isLoaded && canManageReports(role);
+
 	return (
 		<div className={`page-card ${styles.heroCard}`}>
 			<div className={styles.heroCopy}>
@@ -10,7 +14,7 @@ export default function Home() {
 				<p>Be a responsible Bataeno. Track live road incidents, coordinate rapid response, and manage traffic violations with a single operational view built for cities, agencies, and community reporting.</p>
 				<div className={styles.quickActions}>
 					<Link to="/feed/create" className="primary-btn action-link">Report an Incident</Link>
-					<Link to="/tickets" className="secondary-btn action-link secondary-link">Issue Violation Ticket</Link>
+					{canViewTickets && <Link to="/tickets" className="secondary-btn action-link secondary-link">Issue Violation Ticket</Link>}
 				</div>
 			</div>
 			<div className={styles.heroStats}>

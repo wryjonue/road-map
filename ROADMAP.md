@@ -8,9 +8,22 @@ The roadmap prioritizes trustworthy role-based access before authority-only work
 
 ## Status Legend
 
-- `[x]` Reported complete in the supplied checklist; not independently audited by this document.
-- `[~]` Partially complete, as reported.
+- `[x]` Reported complete in the supplied checklist or implemented in the current branch; implementation updates are summarized below.
+- `[~]` Partially complete; remaining work is described in the relevant section.
 - `[ ]` Not complete or not yet confirmed.
+
+## Implementation Update - RBAC And Report Resolution
+
+Implemented in the current branch:
+
+- Clerk's verified top-level `role` claim supports exactly `user`, `authority`, and `admin`. Missing/unknown roles and local mock auth use least-privileged `user`; role assignment remains in the Clerk Dashboard.
+- `user` cannot see the Tickets navigation or Home entry point, and direct access to `/tickets` redirects to Home. `authority` and `admin` can access the mock ticket page.
+- New reports are assigned `Pending` by the Worker regardless of client-supplied status.
+- Pending reports are omitted from regular/anonymous report lists. Authors can read their own pending report and media directly; authority/admin can read all pending reports. Pending media uses private, no-store caching.
+- Authority/admin can resolve reports through `PATCH /api/reports/{id}/status`. Resolution records the verified actor and timestamps; the endpoint does not expose general status editing or deletion.
+- Nine focused API tests cover role normalization, visibility, media access, resolution, mock-auth denial, malformed authorization, and server-controlled creation status.
+
+Still incomplete: map report pins, persistent ticket records/API, ticket-to-report relationships, and the other backlog items below. The ticket page remains mock data; route gating does not make bundled mock records confidential.
 
 ## Current Status
 
@@ -25,12 +38,12 @@ The roadmap prioritizes trustworthy role-based access before authority-only work
 
 - `[x]` Basic profile
 - `[x]` Edit profile
-- `[ ]` Roles - Highest priority
+- `[x]` Read role from Clerk session claims; roles are assigned only through the Clerk Dashboard
 
 ### Report Feed
 
 - `[x]` Report post cards
-- `[ ]` Update report status
+- `[x]` Authority/admin can resolve a report from the feed; Worker validates the role and records resolution metadata
 - `[ ]` Filter reports
 - `[ ]` Comments - Lowest priority
 - `[ ]` Upvote reports
@@ -43,6 +56,7 @@ The roadmap prioritizes trustworthy role-based access before authority-only work
 - `[x]` Media upload to object storage
 - `[x]` Submit report to backend
 - `[x]` Persist report in the database
+- `[x]` New reports receive server-controlled `Pending` status
 
 ### Map View
 
@@ -53,9 +67,10 @@ The roadmap prioritizes trustworthy role-based access before authority-only work
 
 ### Ticketing System
 
-- `[ ]` Replace view-only/mock data with persisted ticket records
+- `[~]` Restrict the mock ticket page to authority/admin; records and actions are still client-side only
+- `[ ]` Replace mock data with persisted ticket records and a secured Worker API
 - `[ ]` Define how tickets relate to reports, incidents, and authority users
-- `[ ]` Add authorized ticket creation and status workflows
+- `[ ]` Add persistent authorized ticket creation and status workflows
 
 ### Dashboard
 
@@ -67,40 +82,42 @@ The roadmap prioritizes trustworthy role-based access before authority-only work
 
 ### Cross-Cutting and AI
 
-- `[ ]` Sitewide role-based access control - Highest priority
+- `[x]` Role-based route/navigation gating and Worker enforcement for Pending visibility and report resolution; role assignment remains Clerk Dashboard-only
 - `[ ]` AI-based report moderation
 
 ## Proposed Delivery Order
 
 ### P0 - Roles and Access Control
 
-Establish the authorization foundation before implementing authority-only tools. Confirm the role model and permission matrix first; role names below are examples to decide, not an assumed final design.
+**Status: Complete for the currently defined role and report workflow scope.** The role source, role set, ticket-page access, pending visibility, and report resolution are implemented as summarized above. Role changes remain outside the application and are performed in Clerk Dashboard.
+
+The current role model is `user`, `authority`, and `admin`. Frontend guards control presentation and navigation; the Worker remains the security boundary.
 
 Scope:
 
-- Define supported roles, such as community member, authority staff, and administrator, and document what each can view and change.
-- Decide how roles are granted, changed, and revoked. Elevated access must not be self-assigned by an ordinary user.
-- Store the authoritative role assignment in a trusted server-side source. Do not treat hidden buttons, route guards, user-editable profile fields, or unsigned client claims as authorization.
-- Enforce permissions in Worker/API handlers for every protected operation. Add matching route, navigation, and action visibility in the frontend for usability.
-- Define default behavior for new users, missing role data, revoked access, and unavailable authorization data. Protected operations must fail closed.
-- Add migration/backfill strategy if role assignments require database changes, without resetting existing user or report data.
+- `[x]` Read the role from the verified top-level Clerk session claim; normalize missing/unknown roles to `user`.
+- `[x]` Keep role assignment out of app UI/API; use the Clerk Dashboard.
+- `[x]` Hide and route-protect the mock Tickets page for `user`; allow `authority` and `admin`.
+- `[x]` Enforce report read visibility and status resolution in the Worker, independent of frontend controls.
+- `[x]` Fail closed for malformed supplied authorization and prevent mock-auth elevation.
+- `[ ]` Add any future authorization scope such as agency/district boundaries when that policy is defined.
 
 Acceptance criteria:
 
-- A documented role-to-capability matrix covers report moderation/resolution, ticket workflows, profile access, and administrative actions.
-- Tests prove allowed and denied behavior for each protected API operation, including unauthenticated users and users with the wrong role.
-- A user cannot gain elevated access by changing browser state or submitting a forged role value.
-- The frontend does not show unavailable authority actions to unauthorized users, while the server remains the enforcement boundary.
-- Role changes take effect predictably and are attributable to an authorized actor.
+- The implemented capability matrix is documented in the implementation update above; persistent ticket API permissions remain pending.
+- Focused tests cover role normalization, pending access, report resolution, and mock-auth denial.
+- Role values are taken from verified Clerk claims, never request data; frontend route/action hiding is backed by Worker checks.
+- Clerk Dashboard assignment and session refresh behavior should be verified with real authority/admin accounts before production rollout.
 
 ### P1 - Authority Report Workflow and Map Pins
 
-Build on P0 so status changes and authority capabilities are permission-checked from the start.
+**Status: Report status resolution is implemented. Map pins remain open.**
 
 Scope:
 
-- Define report statuses and valid transitions, including who may perform each transition and whether a reason or audit event is required.
-- Add feed controls for authorized status updates and show the current status consistently in cards and report details.
+- `[x]` For this release, the status action is limited to `Resolved`; only authority/admin may perform it.
+- `[x]` Add a feed action for authorized status updates and show persisted status on the card.
+- `[x]` Persist `updated_at`, `resolved_at`, and `resolved_by` on resolution.
 - Render report pins from persisted report coordinates; show a useful summary when a pin is selected.
 - Keep map results consistent with feed visibility rules and report permissions.
 
@@ -112,6 +129,8 @@ Acceptance criteria:
 - Pins open the correct report and remain usable on narrow screens and with keyboard navigation.
 
 ### P1 - Persistent Ticketing and Report Relationship
+
+**Status: Not implemented.** Only client-side route gating is present; the current records and actions remain mock/in-memory.
 
 Replace the current mock/in-memory ticket workflow with a backend-backed authority workflow. Decide the relationship before creating the schema: a ticket may reference a report when one exists, but standalone violations may also need to be supported.
 
@@ -184,15 +203,17 @@ Acceptance criteria:
 - AI summaries cannot access data beyond the requesting user's permissions and identify the data period they summarize.
 - Privacy, retention, and user-notice requirements are documented before enabling AI processing.
 
-## Next Planned Work: Role System
+## Next Planned Work: Map And Ticket Workflows
 
-The next implementation request should begin with a short role-design decision: role names, permission matrix, role assignment authority, and whether roles live in application-managed data or trusted identity claims. Then implement the server-side role source and API enforcement first, add migrations if needed, and finally wire frontend route/action visibility. Do not implement the rest of P0 until the role policy is agreed.
+The role foundation is in place. Recommended next slices are:
+
+1. Implement map report pins using the existing role-filtered report API; preserve the same pending visibility rules as the feed.
+2. Design and implement the persistent ticket API. First decide whether a ticket must link to a report, may link optionally, or is independent; then add D1 schema/migrations, role-checked Worker endpoints, and replace the mock UI state.
+3. Add dashboard metrics only after report/ticket statuses and persisted data are stable.
 
 ## Open Decisions
 
-- What are the exact roles, and which role can grant or revoke each one?
 - Are authority staff scoped to a city, district, or agency, or do all authority users share one scope?
-- Are report status changes restricted to authority staff, or can report authors withdraw/edit their own reports?
 - Can tickets exist without a related report? Can a report have multiple tickets?
 - Which reports and ticket fields are public, private, or visible only to authority users?
 - Which filters and dashboard metrics are required for the first operational release?

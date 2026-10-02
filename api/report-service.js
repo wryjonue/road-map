@@ -14,6 +14,8 @@ const REPORT_SELECT = `
 function json(data, status = 200) { return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } }); }
 function errorResponse(message, status = 400) { return json({ error: message }, status); }
 function mediaUrl(key) { return `/api/media/${key.split('/').map(encodeURIComponent).join('/')}`; }
+function canManageReports(auth) { return auth?.role === 'authority' || auth?.role === 'admin'; }
+function canReadPending(report, auth) { return canManageReports(auth) || auth?.userId === report.author_id; }
 function toReport(row, images = []) {
 	return {
 		id: row.id, title: row.title, description: row.description, authorId: row.author_id, authorName: row.author_name,
@@ -39,18 +41,35 @@ function parsePagination(url) {
 	if (!Number.isInteger(rawOffset) || rawOffset < 0) return { error: 'offset must be a non-negative integer' };
 	return { limit: Math.min(rawLimit, MAX_PAGE_SIZE), offset: rawOffset };
 }
-export async function listReports(env, url) {
+export async function listReports(env, url, auth = null) {
 	const pagination = parsePagination(url); if (pagination.error) return errorResponse(pagination.error);
 	const { limit, offset } = pagination;
+	const reportVisibility = canManageReports(auth) ? '' : " AND r.status <> 'Pending'";
+	const countVisibility = canManageReports(auth) ? '' : " AND status <> 'Pending'";
 	const [{ results }, countResult] = await Promise.all([
-		env.road_map_db.prepare(`${REPORT_SELECT} WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`).bind(limit, offset).all(),
-		env.road_map_db.prepare('SELECT COUNT(*) AS total FROM reports WHERE deleted_at IS NULL').all(),
+		env.road_map_db.prepare(`${REPORT_SELECT} WHERE r.deleted_at IS NULL${reportVisibility} ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`).bind(limit, offset).all(),
+		env.road_map_db.prepare(`SELECT COUNT(*) AS total FROM reports WHERE deleted_at IS NULL${countVisibility}`).all(),
 	]);
 	const reports = await Promise.all(results.map(async (row) => { const { results: images } = await env.road_map_db.prepare('SELECT id, r2_key, file_name, content_type FROM report_images WHERE report_id = ? ORDER BY id').bind(row.id).all(); return toReport(row, images); }));
 	const total = countResult.results[0]?.total ?? 0;
 	return json({ reports, pagination: { limit, offset, total, hasMore: offset + reports.length < total } });
 }
-export async function getReport(env, id, status = 200) { const report = await findReport(env, id); return report ? json(report, status) : errorResponse('Report not found', 404); }
+export async function getReport(env, id, status = 200, auth = null) {
+	const report = await findReport(env, id);
+	if (!report || (report.status === 'Pending' && !canReadPending({ status: report.status, author_id: report.authorId }, auth))) return errorResponse('Report not found', 404);
+	return json(report, status);
+}
+export async function resolveReport(env, id, auth) {
+	if (!canManageReports(auth)) return errorResponse('Insufficient permissions', 403);
+	if (!Number.isSafeInteger(id) || id < 1) return errorResponse('Report not found', 404);
+	const report = await env.road_map_db.prepare('SELECT status FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+	if (!report) return errorResponse('Report not found', 404);
+	if (report.status !== 'Resolved') {
+		const resolvedAt = new Date().toISOString();
+		await env.road_map_db.prepare("UPDATE reports SET status = 'Resolved', updated_at = ?, resolved_at = ?, resolved_by = ? WHERE id = ? AND status <> 'Resolved' AND deleted_at IS NULL").bind(resolvedAt, resolvedAt, auth.userId, id).run();
+	}
+	return getReport(env, id, 200, auth);
+}
 function formValue(form, key, fallback = null) { const value = form.get(key); return typeof value === 'string' ? value : fallback; }
 async function parseBody(request) {
 	if (request.headers.get('content-type')?.includes('multipart/form-data')) {
@@ -82,17 +101,19 @@ export async function createReport(request, env, auth) {
 	let reportId; let imageKey; let staticMapKey;
 	try {
 		const authorName = auth.isMock ? body.authorName ?? null : null;
-		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, author_name, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, authorName, categoryId, 'Open', body.barangay ?? null, body.city ?? null, province, body.resolvedAddress ?? null, longitude, latitude).run();
+		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, author_name, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, authorName, categoryId, 'Pending', body.barangay ?? null, body.city ?? null, province, body.resolvedAddress ?? null, longitude, latitude).run();
 		reportId = result.meta.last_row_id;
 		if (image) { imageKey = `reports/${reportId}/images/${crypto.randomUUID()}.${extension(image.type)}`; await env.ROAD_MAP_MEDIA.put(imageKey, image.stream(), { httpMetadata: { contentType: image.type }, customMetadata: { fileName: image.name || 'upload' } }); await env.road_map_db.prepare('INSERT INTO report_images (report_id, image_url, r2_key, content_type, file_name, file_size) VALUES (?, ?, ?, ?, ?, ?)').bind(reportId, imageKey, imageKey, image.type, image.name || null, image.size).run(); }
 		staticMapKey = await createStaticMap(env, reportId, longitude, latitude); await env.road_map_db.prepare('UPDATE reports SET static_map_r2_key = ?, static_map_url = ? WHERE id = ?').bind(staticMapKey, mediaUrl(staticMapKey), reportId).run();
-		return getReport(env, reportId, 201);
+		return getReport(env, reportId, 201, auth);
 	} catch (error) {
 		if (imageKey) await env.ROAD_MAP_MEDIA.delete(imageKey).catch(() => {}); if (staticMapKey) await env.ROAD_MAP_MEDIA.delete(staticMapKey).catch(() => {}); if (reportId) await env.road_map_db.prepare('DELETE FROM reports WHERE id = ?').bind(reportId).run().catch(() => {}); throw error;
 	}
 }
-export async function getMedia(request, env, key) {
+export async function getMedia(request, env, key, auth = null) {
 	if (!key || key.includes('..') || key.startsWith('/') || key.includes('\\')) return errorResponse('Invalid media key', 400);
+	const report = await env.road_map_db.prepare('SELECT r.status, r.author_id FROM reports r WHERE r.deleted_at IS NULL AND (r.static_map_r2_key = ? OR r.image_url = ? OR EXISTS (SELECT 1 FROM report_images ri WHERE ri.report_id = r.id AND ri.r2_key = ?)) LIMIT 1').bind(key, key, key).first();
+	if (!report || (report.status === 'Pending' && !canReadPending(report, auth))) return errorResponse('Media not found', 404);
 	const object = await env.ROAD_MAP_MEDIA.get(key); if (!object) return errorResponse('Media not found', 404);
-	const headers = new Headers(); object.writeHttpMetadata(headers); headers.set('Cache-Control', 'public, max-age=31536000, immutable'); return new Response(object.body, { headers });
+	const headers = new Headers(); object.writeHttpMetadata(headers); headers.set('Cache-Control', 'private, no-store'); return new Response(object.body, { headers });
 }

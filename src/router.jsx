@@ -9,6 +9,7 @@ import MapView from './pages/MapView';
 import About from './pages/About';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
+import RequireRole from './components/RequireRole';
 
 export const router = createBrowserRouter([
 	{
@@ -20,7 +21,7 @@ export const router = createBrowserRouter([
 			{ path: 'feed', element: <FeedPage /> },
 			{ path: 'feed/create', element: <CreateReportPage /> },
 			{ path: 'create-report', element: <CreateReportPage /> },
-			{ path: 'tickets', element: <TicketsPage /> },
+			{ path: 'tickets', element: <RequireRole roles={['authority', 'admin']}><TicketsPage /></RequireRole> },
 			{ path: 'sign-in', element: <SignInPage /> },
 			{ path: 'sign-up', element: <SignUpPage /> },
 			{ path: 'sign-up/verify-email-address', element: <SignUpPage /> },
