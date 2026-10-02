@@ -1,37 +1,98 @@
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '@clerk/react';
+import { BarController, BarElement, CategoryScale, Chart, LinearScale, Tooltip } from 'chart.js';
 import styles from './Dashboard.module.css';
 
-const analyticsCards = [
-	{ label: 'Total', value: '0', delta: '+0 this week' },
-	{ label: 'Resolved ', value: '0', delta: '+0 this week' },
-	{ label: 'iolations ', value: '0', delta: '+0 this week' },
-	{ label: 'Fines Collected', value: '0PHP', delta: '0% collected' },
-];
-const breakdown = [
-	{ label: 'Incidents', value: 42, color: 'var(--primary)' },
-	{ label: 'Roadworks', value: 31, color: 'var(--warning)' },
-	{ label: 'Traffic Violations', value: 27, color: 'var(--success)' },
-];
-const resolutionRates = [{ label: 'Hazard', value: 82 }, { label: 'Traffic', value: 74 }, { label: 'Case', value: 68 }];
-const recentActivity = [
-	{ type: 'Violation', summary: 'Lorem-Ipsum · Lorem-Ipsum', status: 'Open', time: '2m ago' },
-	{ type: 'Incident', summary: 'The quick brown fox', status: 'Open', time: '18m ago' },
-	{ type: 'Violation', summary: '0-8897 · Yes', status: 'Issued', time: '43m ago' },
-	{ type: 'Incident', summary: '0 · Mama Mo Blue', status: 'Resolved', time: '1h ago' },
-];
+Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
+
+const CATEGORY_COLORS = ['#3b7587', '#bb594a', '#718a3e', '#b48228', '#725e8c', '#397158', '#bc7040', '#496894', '#707980'];
 
 export default function Dashboard() {
+	const { getToken, isLoaded, isSignedIn } = useAuth();
+	const chartCanvas = useRef(null);
+	const [metrics, setMetrics] = useState(null);
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState('');
+
+	useEffect(() => {
+		if (!isLoaded) return undefined;
+		const controller = new AbortController();
+		const loadMetrics = async () => {
+			setIsLoading(true);
+			setError('');
+			try {
+				const token = isSignedIn ? await getToken() : null;
+				const response = await fetch('/api/dashboard/metrics', {
+					headers: token ? { Authorization: `Bearer ${token}` } : {},
+					signal: controller.signal,
+				});
+				const data = await response.json();
+				if (!response.ok) throw new Error(data.error || 'Unable to load dashboard metrics');
+				if (!controller.signal.aborted) setMetrics(data);
+			} catch (loadError) {
+				if (loadError.name !== 'AbortError') setError(loadError.message || 'Unable to load dashboard metrics');
+			} finally {
+				if (!controller.signal.aborted) setIsLoading(false);
+			}
+		};
+		void loadMetrics();
+		return () => controller.abort();
+	}, [getToken, isLoaded, isSignedIn]);
+
+	useEffect(() => {
+		if (!chartCanvas.current || !metrics) return undefined;
+		const chart = new Chart(chartCanvas.current, {
+			type: 'bar',
+			data: {
+				labels: metrics.categories.map((category) => category.name),
+				datasets: [{
+					label: 'Reports',
+					data: metrics.categories.map((category) => category.count),
+					backgroundColor: CATEGORY_COLORS,
+					borderWidth: 0,
+					barThickness: 18,
+				}],
+			},
+			options: {
+				indexAxis: 'y',
+				maintainAspectRatio: false,
+				responsive: true,
+				plugins: {
+					legend: { display: false },
+					tooltip: { displayColors: false, callbacks: { label: (context) => ` ${context.parsed.x} reports` } },
+				},
+				scales: {
+					x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e4e4e4' } },
+					y: { grid: { display: false }, ticks: { autoSkip: false, color: '#343434' } },
+				},
+			},
+		});
+		return () => chart.destroy();
+	}, [metrics]);
+
+	const stats = metrics ? [
+		{ label: 'Total', value: metrics.total.toLocaleString() },
+		{ label: 'Resolved', value: metrics.resolved.toLocaleString() },
+		{ label: 'Resolved %', value: `${metrics.resolvedPercentage.toFixed(1)}%` },
+	] : [];
+
 	return (
 		<section className={`page-card ${styles.dashboardPage}`}>
-			<div className={`section-heading ${styles.header}`}>
+			<header className={styles.header}>
 				<div><p className="eyebrow">Road-map Overview</p><h1>Dashboard</h1></div>
-				<button type="button" className="primary-btn">Export Report</button>
+			</header>
+			{error && <p className={styles.error} role="alert">{error}</p>}
+			<div className={styles.analyticsGrid}>
+				{stats.map((stat) => <div key={stat.label} className={styles.statCard}><span>{stat.label}</span><strong>{stat.value}</strong></div>)}
+				{isLoading && <p className={styles.state} role="status">Loading report metrics...</p>}
 			</div>
-			<div className={styles.analyticsGrid}>{analyticsCards.map((card) => <div key={card.label} className={styles.statCard}><span>{card.label}</span><strong>{card.value}</strong><em>{card.delta}</em></div>)}</div>
-			<div className={styles.panels}>
-				<div className={styles.panel}><h3>Incident</h3><div className={styles.metricList}>{breakdown.map((item) => <div key={item.label} className={styles.metricRow}><div className={styles.metricLabel}><span>{item.label}</span><strong>{item.value}%</strong></div><div className={styles.metricBar}><div className={styles.metricFill} style={{ width: `${item.value}%`, background: item.color }} /></div></div>)}</div></div>
-				<div className={styles.panel}><h3>Rate</h3><div className={styles.metricList}>{resolutionRates.map((item) => <div key={item.label} className={styles.metricRow}><div className={styles.metricLabel}><span>{item.label}</span><strong>{item.value}%</strong></div><div className={styles.metricBar}><div className={`${styles.metricFill} ${styles.secondaryFill}`} style={{ width: `${item.value}%` }} /></div></div>)}</div></div>
-			</div>
-			<div className={`${styles.panel} ${styles.tablePanel}`}><h3>Recent activity</h3><table className="audit-table"><thead><tr><th>Type</th><th>Summary</th><th>Status</th><th>Time</th></tr></thead><tbody>{recentActivity.map((item) => <tr key={`${item.type}-${item.summary}`}><td>{item.type}</td><td>{item.summary}</td><td><span className={`status-pill status-${item.status.toLowerCase()}`}>{item.status}</span></td><td>{item.time}</td></tr>)}</tbody></table></div>
+			<section className={styles.chartSection} aria-labelledby="category-chart-heading">
+				<div className={styles.chartHeading}>
+					<div><h2 id="category-chart-heading">Incidents by category</h2><p>Report counts across all categories</p></div>
+				</div>
+				{metrics && <div className={styles.chartFrame}><canvas ref={chartCanvas} role="img" aria-label="Bar chart of report counts by category" /></div>}
+				{!isLoading && !error && metrics?.total === 0 && <p className={styles.emptyState}>No reports to display yet.</p>}
+			</section>
 		</section>
 	);
 }

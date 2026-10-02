@@ -108,7 +108,8 @@ export default function CreateReportPage() {
 			payload.append('description', form.description);
 			payload.append('categoryId', String(form.categoryId));
 			payload.append('authorId', user?.id || 'mock-user-local');
-			payload.append('authorName', user?.fullName || user?.username || 'Local Reporter');
+			payload.append('authorName', [user?.firstName, user?.lastName].filter(Boolean).join(' '));
+			payload.append('authorImageUrl', user?.imageUrl || '');
 			payload.append('barangay', location.barangay);
 			payload.append('city', location.city);
 			payload.append('province', location.province);

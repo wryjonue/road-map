@@ -1,4 +1,5 @@
-import { createReport, getMedia, getReport, listReports, resolveReport } from './report-service.js';
+import { approveReport, createReport, deletePendingReport, getMapReports, getMedia, getReport, listReports, resolveReport } from './report-service.js';
+import { getDashboardMetrics } from './dashboard-service.js';
 import { getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
 
@@ -10,6 +11,18 @@ export default {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
 				return getSampleRoute(request, env);
 			}
+			if (url.pathname === '/api/dashboard/metrics') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await getOptionalUser(request, env);
+				if (auth instanceof Response) return auth;
+				return getDashboardMetrics(env);
+			}
+			if (url.pathname === '/api/map/reports') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await getOptionalUser(request, env);
+				if (auth instanceof Response) return auth;
+				return getMapReports(env, url);
+			}
 			const statusMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/status$/);
 			if (statusMatch) {
 				if (request.method !== 'PATCH') return Response.json({ error: 'Method not allowed' }, { status: 405 });
@@ -18,8 +31,15 @@ export default {
 				if (auth.role !== 'authority' && auth.role !== 'admin') return Response.json({ error: 'Insufficient permissions' }, { status: 403 });
 				let body;
 				try { body = await request.json(); } catch { return Response.json({ error: 'Request body must be valid JSON' }, { status: 400 }); }
-				if (body?.status !== 'Resolved') return Response.json({ error: 'Only the Resolved status is supported' }, { status: 400 });
-				return resolveReport(env, Number(statusMatch[1]), auth);
+				if (body?.status === 'Open') return approveReport(env, Number(statusMatch[1]), auth);
+				if (body?.status === 'Resolved') return resolveReport(env, Number(statusMatch[1]), auth);
+				return Response.json({ error: 'Only Open and Resolved statuses are supported' }, { status: 400 });
+			}
+			const deleteMatch = url.pathname.match(/^\/api\/reports\/(\d+)$/);
+			if (deleteMatch && request.method === 'DELETE') {
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				return deletePendingReport(env, Number(deleteMatch[1]), auth);
 			}
 			const mediaMatch = url.pathname.match(/^\/api\/media\/(.+)$/);
 			if (mediaMatch) {

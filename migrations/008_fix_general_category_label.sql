@@ -1,0 +1,1 @@
+UPDATE categories SET name = 'Other(General)' WHERE id = 9 AND slug = 'other-general';

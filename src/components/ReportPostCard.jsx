@@ -47,14 +47,23 @@ function ReportMediaImage({ src, alt, className }) {
 	return <img className={className} src={src} alt={alt} />;
 }
 
-export default function ReportPostCard({ title, avatar, poster, date, status, description, votes, comments, imageUrl, images, staticMapUrl, canResolve, isResolving, onResolve }) {
+function AuthorAvatar({ src, name }) {
+	const [failed, setFailed] = useState(false);
+	useEffect(() => setFailed(false), [src]);
+	const initials = name?.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
+	return <div className={styles.avatar}>{src && !failed ? <img src={src} alt={`${name || 'Report author'} avatar`} onError={() => setFailed(true)} /> : initials}</div>;
+}
+
+export default function ReportPostCard({ title, avatar, poster, authorImageUrl, date, status, description, votes, comments, imageUrl, images, staticMapUrl, canResolve, isResolving, canModeratePending, canDeletePending, isApproving, isDeleting, isBusy, onResolve, onApprove, onDelete }) {
 	const statusClass = `status-badge status-${status.toLowerCase()}`;
+	const reportImageUrl = images?.[0]?.url || imageUrl;
+	const hasImage = Boolean(reportImageUrl);
 
 	return (
 		<article className={styles.card}>
 			<div className={styles.header}>
 				<div className={styles.posterMeta}>
-					<div className={styles.avatar}>{avatar}</div>
+					<AuthorAvatar src={authorImageUrl} name={poster || avatar} />
 					<div>
 						<h3>{title}</h3>
 						<p>{poster} · {date}</p>
@@ -63,10 +72,10 @@ export default function ReportPostCard({ title, avatar, poster, date, status, de
 				<span className={statusClass}>{status}</span>
 			</div>
 
-			<div className={styles.body}>
+			<div className={`${styles.body} ${!hasImage ? styles.bodyNoImage : ''}`}>
 				<div className={styles.copy}>
 					<p className={styles.description}>{description}</p>
-					{imageUrl || images?.length ? <ReportMediaImage className={styles.uploadedImage} src={images?.[0]?.url || imageUrl} alt="Incident report" /> : <div className={styles.imagePlaceholder}><span>Optional image container</span></div>}
+					{hasImage && <ReportMediaImage className={styles.uploadedImage} src={reportImageUrl} alt="Incident report" />}
 				</div>
 				<div className={styles.mapPreviewWrapper}>
 					{staticMapUrl ? <ReportMediaImage className={styles.mapImage} src={staticMapUrl} alt="Static map of incident location" /> : <div className={styles.mapPreview} aria-label="Map preview" />}
@@ -77,7 +86,9 @@ export default function ReportPostCard({ title, avatar, poster, date, status, de
 				<div className={styles.actions}>
 					<button type="button" className="primary-btn">View Details</button>
 					<button type="button" className="secondary-btn">Upvote</button>
-					{canResolve && status !== 'Resolved' && <button type="button" className="secondary-btn" onClick={onResolve} disabled={isResolving}>{isResolving ? 'Resolving...' : 'Resolve'}</button>}
+					{canModeratePending && status === 'Pending' && <button type="button" className="secondary-btn" onClick={onApprove} disabled={isBusy}>{isApproving ? 'Approving...' : 'Approve'}</button>}
+					{canDeletePending && status === 'Pending' && <button type="button" className="secondary-btn" onClick={onDelete} disabled={isBusy}>{isDeleting ? 'Deleting...' : 'Delete'}</button>}
+					{canResolve && status !== 'Resolved' && status !== 'Pending' && <button type="button" className="secondary-btn" onClick={onResolve} disabled={isBusy}>{isResolving ? 'Resolving...' : 'Resolve'}</button>}
 				</div>
 				<div className={styles.actions}>
 					<button type="button" className="secondary-btn unclickable-btn">Votes ({votes})</button>
