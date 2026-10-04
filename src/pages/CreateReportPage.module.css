@@ -135,6 +135,11 @@
     color: var(--text);
 }
 
+.snapStatus {
+    color: var(--primary) !important;
+    font-weight: 700;
+}
+
 .address small {
     color: var(--muted);
 }

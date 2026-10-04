@@ -215,7 +215,7 @@ export default function MapView() {
 	return (
 		<section className={`page-card ${styles.mapPage}`}>
 			<div className={styles.heading}>
-				<div><p className="eyebrow">Incident locations</p><h1>Road network map</h1></div>
+				<div><h1>Road network map</h1></div>
 				<span className={styles.resultCount}>{reports.length} reports</span>
 			</div>
 

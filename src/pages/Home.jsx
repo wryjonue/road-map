@@ -9,7 +9,6 @@ export default function Home() {
 	return (
 		<div className={`page-card ${styles.heroCard}`}>
 			<div className={styles.heroCopy}>
-				<p className="eyebrow">Citywide road intelligence</p>
 				<h1>Monitor hazards. Enforce safer roads.</h1>
 				<p>Be a responsible Bataeno. Track live road incidents, coordinate rapid response, and manage traffic violations with a single operational view built for cities, agencies, and community reporting.</p>
 				<div className={styles.quickActions}>

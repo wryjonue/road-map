@@ -1,3 +1,5 @@
+import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
+
 const MAX_PAGE_SIZE = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const MAX_REQUEST_SIZE = MAX_IMAGE_SIZE + 256 * 1024;
@@ -218,8 +220,13 @@ export async function createReport(request, env, auth) {
 	const contentLength = Number(request.headers.get('Content-Length'));
 	if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_SIZE) return errorResponse('Request is too large');
 	let body; try { body = await parseBody(request); } catch { return errorResponse('Request body must be valid JSON or multipart form data'); }
-	const title = typeof body.title === 'string' ? body.title.trim() : ''; const description = typeof body.description === 'string' ? body.description.trim() : ''; const province = typeof body.province === 'string' ? body.province.trim() : ''; const longitude = Number(body.longitude); const latitude = Number(body.latitude); const categoryId = Number(body.categoryId);
-	if (!title) return errorResponse('title is required'); if (!description) return errorResponse('description is required'); if (title.length > 160) return errorResponse('title must be 160 characters or fewer'); if (description.length > 5000) return errorResponse('description must be 5000 characters or fewer'); if (!Number.isInteger(categoryId) || categoryId < 1) return errorResponse('categoryId must be a positive integer'); if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return errorResponse('longitude must be between -180 and 180'); if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return errorResponse('latitude must be between -90 and 90'); if (province.toLowerCase() !== 'bataan') return errorResponse('Reports are limited to the Province of Bataan'); if (longitude < 120.15 || longitude > 120.75 || latitude < 14.25 || latitude > 15.05) return errorResponse('Coordinates must be inside the Province of Bataan');
+	const title = typeof body.title === 'string' ? body.title.trim() : ''; const description = typeof body.description === 'string' ? body.description.trim() : ''; const longitude = Number(body.longitude); const latitude = Number(body.latitude); const categoryId = Number(body.categoryId);
+	if (!title) return errorResponse('title is required'); if (!description) return errorResponse('description is required'); if (title.length > 160) return errorResponse('title must be 160 characters or fewer'); if (description.length > 5000) return errorResponse('description must be 5000 characters or fewer'); if (!Number.isInteger(categoryId) || categoryId < 1) return errorResponse('categoryId must be a positive integer');
+	let resolvedLocation;
+	try { resolvedLocation = await resolveRoadLocation(latitude, longitude, env, request.signal); } catch (error) {
+		if (error instanceof LocationResolutionError) return errorResponse(error.message, error.status);
+		throw error;
+	}
 	const category = await env.road_map_db.prepare('SELECT id FROM categories WHERE id = ?').bind(categoryId).first(); if (!category) return errorResponse('categoryId does not reference an existing category');
 	const image = body.image;
 	if (image && (typeof image.type !== 'string' || !IMAGE_TYPES.has(image.type))) return errorResponse('image must be a JPEG, PNG, GIF, or WebP file');
@@ -228,7 +235,7 @@ export async function createReport(request, env, auth) {
 	try {
 		const authorName = getAuthorName(body, auth);
 		const authorImageUrl = getAuthorImageUrl(body, auth);
-		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, author_name, author_image_url, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, authorName, authorImageUrl, categoryId, 'Pending', body.barangay ?? null, body.city ?? null, province, body.resolvedAddress ?? null, longitude, latitude).run();
+		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, author_name, author_image_url, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, authorName, authorImageUrl, categoryId, 'Pending', resolvedLocation.barangay || null, resolvedLocation.city || null, resolvedLocation.province, resolvedLocation.address, resolvedLocation.longitude, resolvedLocation.latitude).run();
 		reportId = result.meta.last_row_id;
 		if (image) { imageKey = `reports/${reportId}/images/${crypto.randomUUID()}.${extension(image.type)}`; await env.ROAD_MAP_MEDIA.put(imageKey, image.stream(), { httpMetadata: { contentType: image.type }, customMetadata: { fileName: image.name || 'upload' } }); await env.road_map_db.prepare('INSERT INTO report_images (report_id, image_url, r2_key, content_type, file_name, file_size) VALUES (?, ?, ?, ?, ?, ?)').bind(reportId, imageKey, imageKey, image.type, image.name || null, image.size).run(); }
 		staticMapKey = await createStaticMap(env, reportId, longitude, latitude); await env.road_map_db.prepare('UPDATE reports SET static_map_r2_key = ?, static_map_url = ? WHERE id = ?').bind(staticMapKey, mediaUrl(staticMapKey), reportId).run();

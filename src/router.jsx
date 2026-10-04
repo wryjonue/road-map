@@ -1,32 +1,30 @@
-import { createBrowserRouter } from 'react-router';
+import { Suspense } from 'react';
+import { createBrowserRouter, Navigate } from 'react-router';
 import RootLayout from './components/RootLayout';
-import Home from './pages/Home';
-import Dashboard from './pages/Dashboard';
-import FeedPage from './pages/FeedPage';
-import CreateReportPage from './pages/CreateReportPage';
-import TicketsPage from './pages/TicketsPage';
-import MapView from './pages/MapView';
-import About from './pages/About';
-import SignInPage from './pages/SignInPage';
-import SignUpPage from './pages/SignUpPage';
 import RequireRole from './components/RequireRole';
+import { About, CreateReportPage, Dashboard, FeedPage, Home, MapView, SignInPage, SignUpPage, TicketsPage } from './lazy-pages';
+import { ROUTE_ENABLED } from './route-flags';
+
+function renderPage(Page) {
+	return <Suspense fallback={<p>Loading page...</p>}><Page /></Suspense>;
+}
 
 export const router = createBrowserRouter([
 	{
 		path: '/',
 		element: <RootLayout />,
 		children: [
-			{ index: true, element: <Home /> },
-			{ path: 'dashboard', element: <Dashboard /> },
-			{ path: 'feed', element: <FeedPage /> },
-			{ path: 'feed/create', element: <CreateReportPage /> },
-			{ path: 'create-report', element: <CreateReportPage /> },
-			{ path: 'tickets', element: <RequireRole roles={['authority', 'admin']}><TicketsPage /></RequireRole> },
-			{ path: 'sign-in/*', element: <SignInPage /> },
-			{ path: 'sign-up/*', element: <SignUpPage /> },
-			{ path: 'sign-up/verify-email-address', element: <SignUpPage /> },
-			{ path: 'map', element: <MapView /> },
-			{ path: 'about', element: <About /> },
+			...(ROUTE_ENABLED.home ? [{ index: true, element: renderPage(Home) }] : [{ index: true, element: <Navigate to="/dashboard" replace /> }]),
+			{ path: 'dashboard', element: renderPage(Dashboard) },
+			{ path: 'feed', element: renderPage(FeedPage) },
+			{ path: 'feed/create', element: renderPage(CreateReportPage) },
+			{ path: 'create-report', element: renderPage(CreateReportPage) },
+			...(ROUTE_ENABLED.tickets ? [{ path: 'tickets', element: <RequireRole roles={['authority', 'admin']}>{renderPage(TicketsPage)}</RequireRole> }] : []),
+			{ path: 'sign-in/*', element: renderPage(SignInPage) },
+			{ path: 'sign-up/*', element: renderPage(SignUpPage) },
+			{ path: 'sign-up/verify-email-address', element: renderPage(SignUpPage) },
+			{ path: 'map', element: renderPage(MapView) },
+			...(ROUTE_ENABLED.about ? [{ path: 'about', element: renderPage(About) }] : []),
 		],
 	},
 ]);

@@ -16,10 +16,6 @@
 	font-size: 1.45rem;
 }
 
-.heading .eyebrow {
-	margin-bottom: 5px;
-}
-
 .resultCount {
 	color: var(--muted);
 	font-size: .85rem;

@@ -7,15 +7,7 @@ import categories from '../data/categories';
 import styles from './CreateReportPage.module.css';
 
 const BATAAN_CENTER = [120.5394, 14.6779];
-const initialLocation = { barangay: '', city: '', province: '', address: '', coordinates: null };
-
-function getLocationFields(address) {
-	return {
-		barangay: address.quarter || address.suburb || address.village || address.neighbourhood || '',
-		city: address.city || address.town || address.municipality || '',
-		province: address.state || address.region || '',
-	};
-}
+const initialLocation = { barangay: '', city: '', province: '', address: '', roadName: '', snapDistance: null, coordinates: null };
 
 export default function CreateReportPage() {
 	const navigate = useNavigate();
@@ -48,31 +40,28 @@ export default function CreateReportPage() {
 
 		const resolveLocation = async () => {
 			const { lat, lng } = marker.getLngLat();
-			console.log('Current Marker Coordinates:', { lat, lng });
 			setIsResolving(true);
 			setLocationError('');
+			setLocation(initialLocation);
 			requestController.current?.abort();
 			const controller = new AbortController();
 			requestController.current = controller;
 			try {
-				const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
-					headers: { 'User-Agent': 'RoadMapApp/1.0' },
+				const params = new URLSearchParams({ latitude: String(lat), longitude: String(lng) });
+				const token = await getToken();
+				const response = await fetch(`/api/location/resolve?${params}`, {
+					headers: token ? { Authorization: `Bearer ${token}` } : { 'X-Local-Mock-Auth': 'true' },
 					signal: controller.signal,
 				});
-				if (!response.ok) throw new Error('Reverse geocoding failed');
 				const result = await response.json();
-				const address = result.address || {};
-				const region = `${address.state || ''} ${address.region || ''} ${address.county || ''}`.toLowerCase();
-				if (!region.includes('bataan')) {
-					setLocation(initialLocation);
-					setLocationError('Reports are currently limited to the Province of Bataan. Please pin a location inside Bataan.');
-					return;
-				}
-				setLocation({ ...getLocationFields(address), address: result.display_name || '', coordinates: { lat, lng } });
+				if (!response.ok) throw new Error(result.error || 'Unable to resolve this location');
+				if (controller.signal.aborted || requestController.current !== controller) return;
+				marker.setLngLat([result.longitude, result.latitude]);
+				setLocation({ barangay: result.barangay, city: result.city, province: result.province, address: result.address, roadName: result.roadName, snapDistance: result.snapDistance, coordinates: { lat: result.latitude, lng: result.longitude } });
 			} catch (error) {
-				if (error.name !== 'AbortError') setLocationError('We could not resolve this location. Please try dragging the marker again.');
+				if (error.name !== 'AbortError') setLocationError(error.message || 'We could not resolve this location. Please try dragging the marker again.');
 			} finally {
-				if (!controller.signal.aborted) setIsResolving(false);
+				if (!controller.signal.aborted && requestController.current === controller) setIsResolving(false);
 			}
 		};
 
@@ -82,7 +71,7 @@ export default function CreateReportPage() {
 			marker.remove();
 			map.remove();
 		};
-	}, []);
+	}, [getToken]);
 
 	useEffect(() => () => { if (imagePreview) URL.revokeObjectURL(imagePreview); }, [imagePreview]);
 
@@ -136,7 +125,7 @@ export default function CreateReportPage() {
 
 	return (
 		<section className={`page-card ${styles.page}`}>
-			<div className={styles.heading}><div><p className="eyebrow">Community reporting</p><h1>Create Incident Report</h1><p>Pin the incident location and share the details with your road response team.</p></div></div>
+			<div className={styles.heading}><div><h1>Create Incident Report</h1><p>Pin the incident location and share the details with your road response team.</p></div></div>
 			<form className={styles.form} onSubmit={handleSubmit}>
 				<div className={styles.fields}>
 					<label className={styles.field}><span>Post Title</span><input type="text" value={form.title} onChange={(event) => updateField('title', event.target.value)} required /></label>
@@ -145,7 +134,7 @@ export default function CreateReportPage() {
 					<label className={`${styles.field} ${styles.fullWidth}`}><span>Image (optional)</span><input type="file" accept="image/*" onChange={handleImageChange} />{imagePreview && <img className={styles.preview} src={imagePreview} alt="Selected incident" />}</label>
 				</div>
 
-				<div className={styles.locationSection}><div className={styles.locationHeading}><div><h2>Incident location</h2><p>Drag the marker to the incident. The address will be resolved automatically.</p></div>{isResolving && <span className={styles.loading}>Resolving address...</span>}</div><div ref={mapContainer} className={styles.map} />{locationError && <div className={styles.warning} role="alert">{locationError}</div>}{location.address && <div className={styles.address}><strong>Resolved address</strong><span>{location.address}</span><small>{location.barangay || 'Barangay unavailable'} · {location.city || 'Municipality unavailable'} · {location.province}</small></div>}</div>
+				<div className={styles.locationSection}><div className={styles.locationHeading}><div><h2>Incident location</h2><p>Drag the marker to the incident. The address will be resolved automatically.</p></div>{isResolving && <span className={styles.loading}>Resolving address...</span>}</div><div ref={mapContainer} className={styles.map} />{locationError && <div className={styles.warning} role="alert">{locationError}</div>}{location.address && <div className={styles.address}><strong>Resolved address</strong><span>{location.address}</span><small className={styles.snapStatus}>{location.roadName ? `Marker snapped ${Math.round(location.snapDistance)} m to ${location.roadName}` : 'Marker matched to the nearest road'}</small><small>{location.barangay || 'Barangay unavailable'} · {location.city || 'Municipality unavailable'} · {location.province}</small></div>}</div>
 				<div className={styles.actions}><button type="button" className="ghost-btn danger-btn" onClick={() => navigate('/feed')}>Cancel</button><button type="submit" className="primary-btn" disabled={isSubmitting || isResolving}>{isSubmitting ? 'Submitting...' : 'Submit Report'}</button></div>
 			</form>
 		</section>

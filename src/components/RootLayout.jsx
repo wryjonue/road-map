@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import Header from './Header';
 import { canManageReports, useAppRole } from '../auth/roles';
+import { ROUTE_ENABLED } from '../route-flags';
 import styles from './RootLayout.module.css';
 
 export default function RootLayout() {
@@ -16,12 +17,12 @@ export default function RootLayout() {
 		<div className={styles.appShell}>
 			<Header />
 			<nav className={styles.topNav} aria-label="Main navigation">
-				<NavLink className="navlink" to="/">Home</NavLink>
+				{ROUTE_ENABLED.home && <NavLink className="navlink" to="/">Home</NavLink>}
 				<NavLink className="navlink" to="/dashboard">Dashboard</NavLink>
 				<NavLink className="navlink" to="/feed">Feed</NavLink>
-				{canViewTickets && <NavLink className="navlink" to="/tickets">Tickets</NavLink>}
+				{ROUTE_ENABLED.tickets && canViewTickets && <NavLink className="navlink" to="/tickets">Tickets</NavLink>}
 				<NavLink className="navlink" to="/map">Map</NavLink>
-				<NavLink className="navlink" to="/about">About</NavLink>
+				{ROUTE_ENABLED.about && <NavLink className="navlink" to="/about">About</NavLink>}
 			</nav>
 			<main className={styles.mainContent}><Outlet /></main>
 		</div>

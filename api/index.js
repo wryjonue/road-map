@@ -2,11 +2,21 @@ import { approveReport, createReport, deletePendingReport, getMapReports, getMed
 import { getDashboardMetrics } from './dashboard-service.js';
 import { getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
+import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
 
 export default {
 	async fetch(request, env) {
 		const url = new URL(request.url);
 		try {
+			if (url.pathname === '/api/location/resolve') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				const latitude = Number(url.searchParams.get('latitude'));
+				const longitude = Number(url.searchParams.get('longitude'));
+				const location = await resolveRoadLocation(latitude, longitude, env, request.signal);
+				return Response.json(location, { headers: { 'Cache-Control': 'no-store' } });
+			}
 			if (url.pathname === '/api/routes/sample') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
 				return getSampleRoute(request, env);
@@ -68,6 +78,7 @@ export default {
 			}
 			return Response.json({ error: 'Method not allowed' }, { status: 405 });
 		} catch (error) {
+			if (error instanceof LocationResolutionError) return Response.json({ error: error.message }, { status: error.status });
 			console.error(error);
 			return Response.json({ error: 'Internal server error' }, { status: 500 });
 		}

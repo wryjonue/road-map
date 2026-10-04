@@ -3,6 +3,7 @@ import { afterEach, test } from 'node:test';
 import { normalizeRole } from './auth.js';
 import worker from './index.js';
 import categories from '../src/data/categories.js';
+import { resolveRoadLocation } from './location-service.js';
 import { approveReport, createReport, deletePendingReport, getMapReports, getMedia, getReport, listReports, resolveReport } from './report-service.js';
 
 function reportRow({ id, status, authorId = 'reporter-1', authorName = null, authorImageUrl = null, mapKey = null, imageKey = null, deletedAt = null }) {
@@ -115,6 +116,12 @@ class FakeDatabase {
 				database.queries.push({ sql, values });
 				if (sql.startsWith('INSERT INTO reports')) {
 					const row = reportRow({ id: 1, status: values[6], authorId: values[2], authorName: values[3], authorImageUrl: values[4] });
+					row.barangay = values[7];
+					row.city = values[8];
+					row.province = values[9];
+					row.resolved_address = values[10];
+					row.longitude = values[11];
+					row.latitude = values[12];
 					database.rows.push(row);
 					return { meta: { last_row_id: row.id, changes: 1 } };
 				}
@@ -339,10 +346,47 @@ test('malformed supplied credentials are rejected on public reads', async () => 
 	assert.equal(response.status, 401);
 });
 
+test('location preview requires auth and returns the snapped road location', async () => {
+	const { env } = createEnvironment();
+	const unauthenticated = await worker.fetch(new Request('https://roadmap.test/api/location/resolve?latitude=14.5&longitude=120.5'), env);
+	assert.equal(unauthenticated.status, 401);
+	const originalGlobalFetch = globalThis.fetch;
+	globalThis.fetch = async (url, options) => {
+		if (url.includes('/mapmatching')) {
+			const body = JSON.parse(options.body);
+			assert.deepEqual(body.waypoints[0].location, [120.5, 14.5]);
+			return Response.json({ features: [{ properties: { waypoints: [{ location: [120.501, 14.501], match_type: 'matched', match_distance: 25 }], legs: [{ steps: [{ name: 'Road 1' }] }] } }] });
+		}
+		return Response.json({ display_name: 'Road 1, Balanga, Bataan', address: { road: 'Road 1', city: 'Balanga', state: 'Bataan' } });
+	};
+	try {
+		const request = new Request('https://roadmap.test/api/location/resolve?latitude=14.5&longitude=120.5', { headers: { 'X-Local-Mock-Auth': 'true' } });
+		const response = await worker.fetch(request, { ...env, ENVIRONMENT: 'development', ALLOW_LOCAL_MOCK_AUTH: 'true' });
+		assert.equal(response.status, 200);
+		assert.deepEqual(await response.json(), { longitude: 120.501, latitude: 14.501, snapDistance: 25, roadName: 'Road 1', barangay: '', city: 'Balanga', province: 'Bataan', address: 'Road 1, Balanga, Bataan' });
+	} finally {
+		globalThis.fetch = originalGlobalFetch;
+	}
+});
+
+test('location resolver rejects road matches beyond the snap limit', async () => {
+	const originalGlobalFetch = globalThis.fetch;
+	globalThis.fetch = async () => Response.json({ features: [{ properties: { waypoints: [{ location: [120.6, 14.6], match_type: 'matched', match_distance: 101 }] } }] });
+	try {
+		await assert.rejects(() => resolveRoadLocation(14.5, 120.5, { GEOAPIFY_API_KEY: 'test-key' }), /more than 100 meters/);
+	} finally {
+		globalThis.fetch = originalGlobalFetch;
+	}
+});
+
 test('report creation forces Pending and uses the verified author ID', async () => {
 	const { env, database } = createEnvironment();
 	const originalGlobalFetch = globalThis.fetch;
-	globalThis.fetch = async () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/png' } });
+	globalThis.fetch = async (url) => {
+		if (url.includes('/mapmatching')) return Response.json({ features: [{ properties: { waypoints: [{ location: [120.5001, 14.5001], match_type: 'matched', match_distance: 12 }] } }] });
+		if (url.includes('nominatim.openstreetmap.org')) return Response.json({ display_name: 'Matched Road, Balanga, Bataan', address: { road: 'Matched Road', suburb: 'Central', city: 'Balanga', state: 'Bataan' } });
+		return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/png' } });
+	};
 	const form = new FormData();
 	form.set('title', 'Blocked road');
 	form.set('description', 'A lane is blocked');
@@ -367,6 +411,8 @@ test('report creation forces Pending and uses the verified author ID', async () 
 		assert.equal(database.rows[0].status, 'Pending');
 		assert.equal(database.rows[0].author_name, 'Jane Reporter');
 		assert.equal(database.rows[0].author_image_url, 'https://img.clerk.com/verified-avatar.jpg');
+		assert.equal(database.rows[0].longitude, 120.5001);
+		assert.equal(database.rows[0].latitude, 14.5001);
 	} finally {
 		globalThis.fetch = originalGlobalFetch;
 	}
@@ -446,9 +492,14 @@ test('dashboard metrics aggregate active reports and include zero-count categori
 	const env = {
 		road_map_db: {
 			prepare(sql) {
-				assert.ok(sql.includes('r.deleted_at IS NULL'));
-				assert.ok(sql.includes('GROUP BY c.id, c.name'));
-				return { all: async () => ({ results: rows }) };
+				return { all: async () => {
+					if (sql.includes('GROUP BY c.id, c.name')) {
+						assert.ok(sql.includes('r.deleted_at IS NULL'));
+						return { results: rows };
+					}
+					assert.ok(sql.includes("strftime('%Y-%m', created_at)"));
+					return { results: [{ report_month: '2026-09', report_count: 1 }, { report_month: '2026-10', report_count: 1 }] };
+				} };
 			},
 		},
 	};
@@ -460,6 +511,7 @@ test('dashboard metrics aggregate active reports and include zero-count categori
 	assert.equal(data.resolved, 1);
 	assert.equal(data.resolvedPercentage, 50);
 	assert.equal(data.categories.length, categories.length);
+		assert.deepEqual(data.monthlyReports, [{ month: '2026-09', count: 1 }, { month: '2026-10', count: 1 }]);
 	assert.deepEqual(data.categories[0], { id: categories[0].id, name: categories[0].name, count: 2 });
 	assert.ok(data.categories.slice(1).every((category) => category.count === 0));
 });

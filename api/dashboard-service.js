@@ -8,6 +8,13 @@ export async function getDashboardMetrics(env) {
 		GROUP BY c.id, c.name
 		ORDER BY c.id
 	`).all();
+	const { results: monthlyResults } = await env.road_map_db.prepare(`
+		SELECT strftime('%Y-%m', created_at) AS report_month, COUNT(*) AS report_count
+		FROM reports
+		WHERE deleted_at IS NULL AND status IN ('Open', 'Resolved')
+		GROUP BY report_month
+		ORDER BY report_month
+	`).all();
 	const categories = results.map((row) => ({
 		id: row.category_id,
 		name: row.category_name,
@@ -16,5 +23,6 @@ export async function getDashboardMetrics(env) {
 	const total = categories.reduce((sum, category) => sum + category.count, 0);
 	const resolved = results.reduce((sum, row) => sum + (Number(row.resolved_count) || 0), 0);
 	const resolvedPercentage = total ? Math.round((resolved / total) * 1000) / 10 : 0;
-	return Response.json({ total, resolved, resolvedPercentage, categories }, { headers: { 'Cache-Control': 'no-store' } });
+	const monthlyReports = monthlyResults.map((row) => ({ month: row.report_month, count: Number(row.report_count) || 0 }));
+	return Response.json({ total, resolved, resolvedPercentage, categories, monthlyReports }, { headers: { 'Cache-Control': 'no-store' } });
 }
