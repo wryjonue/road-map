@@ -54,8 +54,9 @@ function AuthorAvatar({ src, name }) {
 	return <div className={styles.avatar}>{src && !failed ? <img src={src} alt={`${name || 'Report author'} avatar`} onError={() => setFailed(true)} /> : initials}</div>;
 }
 
-export default function ReportPostCard({ title, avatar, poster, authorImageUrl, date, status, description, votes, comments, imageUrl, images, staticMapUrl, canResolve, isResolving, canModeratePending, canDeletePending, isApproving, isDeleting, isBusy, onResolve, onApprove, onDelete }) {
+export default function ReportPostCard({ title, avatar, poster, authorImageUrl, date, status, description, votes, comments, imageUrl, images, staticMapUrl, canChangeStatus, isStatusUpdating, isBusy, onStatusChange }) {
 	const statusClass = `status-badge status-${status.toLowerCase()}`;
+	const nextStatus = status === 'Pending' ? 'Open' : status === 'Open' ? 'Resolved' : null;
 	const reportImageUrl = images?.[0]?.url || imageUrl;
 	const hasImage = Boolean(reportImageUrl);
 
@@ -69,7 +70,7 @@ export default function ReportPostCard({ title, avatar, poster, authorImageUrl, 
 						<p>{poster} · {date}</p>
 					</div>
 				</div>
-				<span className={statusClass}>{status}</span>
+				{canChangeStatus && nextStatus ? <button type="button" className={statusClass} onClick={() => onStatusChange(nextStatus)} disabled={isBusy} aria-label={`Change report status from ${status} to ${nextStatus}`} title={`Change status to ${nextStatus}`}>{isStatusUpdating ? 'Updating...' : status}</button> : <span className={statusClass}>{status}</span>}
 			</div>
 
 			<div className={`${styles.body} ${!hasImage ? styles.bodyNoImage : ''}`}>
@@ -86,9 +87,6 @@ export default function ReportPostCard({ title, avatar, poster, authorImageUrl, 
 				<div className={styles.actions}>
 					<button type="button" className="primary-btn">View Details</button>
 					<button type="button" className="secondary-btn">Upvote</button>
-					{canModeratePending && status === 'Pending' && <button type="button" className="secondary-btn" onClick={onApprove} disabled={isBusy}>{isApproving ? 'Approving...' : 'Approve'}</button>}
-					{canDeletePending && status === 'Pending' && <button type="button" className="secondary-btn" onClick={onDelete} disabled={isBusy}>{isDeleting ? 'Deleting...' : 'Delete'}</button>}
-					{canResolve && status !== 'Resolved' && status !== 'Pending' && <button type="button" className="secondary-btn" onClick={onResolve} disabled={isBusy}>{isResolving ? 'Resolving...' : 'Resolve'}</button>}
 				</div>
 				<div className={styles.actions}>
 					<button type="button" className="secondary-btn unclickable-btn">Votes ({votes})</button>

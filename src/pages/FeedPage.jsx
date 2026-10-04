@@ -39,31 +39,9 @@ export default function FeedPage() {
 		if (isLoaded) void loadReports();
 	}, [isLoaded, loadReports]);
 
-	const resolveReport = async (reportId) => {
+	const updateReportStatus = async (reportId, nextStatus) => {
 		if (!canManageReports(role) || mutatingReport) return;
-		setMutatingReport({ id: reportId, action: 'resolve' });
-		setError('');
-		try {
-			const token = await getToken();
-			if (!token) throw new Error('Sign in again to update this report.');
-			const response = await fetch(`/api/reports/${reportId}/status`, {
-				method: 'PATCH',
-				headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-				body: JSON.stringify({ status: 'Resolved' }),
-			});
-			const data = await response.json();
-			if (!response.ok) throw new Error(data.error || 'Unable to resolve report');
-			setReports((current) => current.map((report) => report.id === reportId ? { ...report, ...data } : report));
-		} catch (resolveError) {
-			setError(resolveError.message);
-		} finally {
-			setMutatingReport(null);
-		}
-	};
-
-	const approveReport = async (reportId) => {
-		if (!canManageReports(role) || mutatingReport) return;
-		setMutatingReport({ id: reportId, action: 'approve' });
+		setMutatingReport({ id: reportId, status: nextStatus });
 		setError('');
 		try {
 			const token = await getToken();
@@ -74,36 +52,10 @@ export default function FeedPage() {
 				body: JSON.stringify({ status: 'Open' }),
 			});
 			const data = await response.json();
-			if (!response.ok) throw new Error(data.error || 'Unable to approve report');
+			if (!response.ok) throw new Error(data.error || 'Unable to update report status');
 			setReports((current) => current.map((report) => report.id === reportId ? { ...report, ...data } : report));
-		} catch (approveError) {
-			setError(approveError.message);
-		} finally {
-			setMutatingReport(null);
-		}
-	};
-
-	const deleteReport = async (report) => {
-		const canDelete = canManageReports(role) || report.authorId === user?.id;
-		if (!canDelete || mutatingReport || !window.confirm('Delete this pending report?')) return;
-		setMutatingReport({ id: report.id, action: 'delete' });
-		setError('');
-		try {
-			const token = await getToken();
-			if (!token) throw new Error('Sign in again to update this report.');
-			const response = await fetch(`/api/reports/${report.id}`, {
-				method: 'DELETE',
-				headers: { Authorization: `Bearer ${token}` },
-			});
-			const data = await response.json();
-			if (!response.ok) throw new Error(data.error || 'Unable to delete report');
-			setReports((current) => current.filter((currentReport) => currentReport.id !== report.id));
-			setPagination((current) => {
-				const total = Math.max(0, current.total - 1);
-				return { ...current, total, hasMore: reports.length - 1 < total };
-			});
-		} catch (deleteError) {
-			setError(deleteError.message);
+		} catch (statusError) {
+			setError(statusError.message);
 		} finally {
 			setMutatingReport(null);
 		}
@@ -118,7 +70,7 @@ export default function FeedPage() {
 			{isLoading && reports.length === 0 && <p className={styles.state}>Loading reports...</p>}
 			{error && <p className={styles.error} role="alert">{error}</p>}
 			{!isLoading && !error && reports.length === 0 && <p className={styles.state}>No reports found.</p>}
-			{reports.length > 0 && <div className={styles.list}>{reports.map((report) => <ReportPostCard key={report.id} {...report} authorImageUrl={report.authorImageUrl || (report.authorId === user?.id ? user?.imageUrl : null)} poster={report.authorName || (report.authorId === user?.id ? authorName : report.authorId)} date={report.createdAt} votes={report.voteCount} comments={report.commentCount} canResolve={canManageReports(role)} isResolving={mutatingReport?.id === report.id && mutatingReport.action === 'resolve'} canModeratePending={canManageReports(role)} canDeletePending={canManageReports(role) || report.authorId === user?.id} isApproving={mutatingReport?.id === report.id && mutatingReport.action === 'approve'} isDeleting={mutatingReport?.id === report.id && mutatingReport.action === 'delete'} isBusy={Boolean(mutatingReport)} onResolve={() => resolveReport(report.id)} onApprove={() => approveReport(report.id)} onDelete={() => deleteReport(report)} />)}</div>}
+			{reports.length > 0 && <div className={styles.list}>{reports.map((report) => <ReportPostCard key={report.id} {...report} authorImageUrl={report.authorImageUrl || (report.authorId === user?.id ? user?.imageUrl : null)} poster={report.authorName || (report.authorId === user?.id ? authorName : report.authorId)} date={report.createdAt} votes={report.voteCount} comments={report.commentCount} canChangeStatus={canManageReports(role)} isStatusUpdating={mutatingReport?.id === report.id} isBusy={Boolean(mutatingReport)} onStatusChange={(nextStatus) => updateReportStatus(report.id, nextStatus)} />)}</div>}
 			{pagination.hasMore && <button type="button" className={`primary-btn ${styles.loadMore}`} onClick={() => loadReports(reports.length, true)} disabled={isLoading}>{isLoading ? 'Loading...' : 'Load More'}</button>}
 		</section>
 	);
