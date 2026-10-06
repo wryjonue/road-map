@@ -192,24 +192,23 @@ a {
 	flex-shrink: 0;
 }
 
-button.status-badge {
+select.status-badge {
 	font: inherit;
-	appearance: none;
 	cursor: pointer;
 	transition: box-shadow .15s ease, transform .15s ease;
 }
 
-button.status-badge:hover:not(:disabled) {
+select.status-badge:hover:not(:disabled) {
 	transform: translate(-1px, -1px);
 	box-shadow: 2px 2px 0 currentColor;
 }
 
-button.status-badge:disabled {
+select.status-badge:disabled {
 	cursor: wait;
 	opacity: .7;
 }
 
-button.status-badge:focus-visible {
+select.status-badge:focus-visible {
 	outline: 3px solid var(--primary);
 	outline-offset: 3px;
 }

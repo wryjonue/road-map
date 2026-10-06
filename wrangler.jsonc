@@ -13,6 +13,7 @@
 		"VITE_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsucm9hZG1hcC52aWVyeW4ucGFydHkk"
 	},
 	"assets": {
+		"directory": "dist/client",
 		"not_found_handling": "single-page-application"
 	},
 	"observability": {

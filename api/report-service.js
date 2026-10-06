@@ -154,17 +154,27 @@ export async function approveReport(env, id, auth) {
 	if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
 	return getReport(env, id, 200, auth);
 }
+export async function rejectReport(env, id, auth) {
+	if (!canManageReports(auth)) return errorResponse('Insufficient permissions', 403);
+	if (!Number.isSafeInteger(id) || id < 1) return errorResponse('Report not found', 404);
+	const report = await env.road_map_db.prepare('SELECT status FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+	if (!report) return errorResponse('Report not found', 404);
+	if (report.status !== 'Pending') return errorResponse('Only pending reports can be rejected', 409);
+	const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Rejected', updated_at = ? WHERE id = ? AND status = 'Pending' AND deleted_at IS NULL").bind(new Date().toISOString(), id).run();
+	if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
+	return getReport(env, id, 200, auth);
+}
 export async function deletePendingReport(env, id, auth) {
 	if (!auth?.userId) return errorResponse('Authentication required', 401);
 	if (!Number.isSafeInteger(id) || id < 1) return errorResponse('Report not found', 404);
 	const report = await env.road_map_db.prepare('SELECT status, author_id FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
 	if (!report) return errorResponse('Report not found', 404);
 	if (!canManageReports(auth) && auth.userId !== report.author_id) return errorResponse('Report not found', 404);
-	if (report.status !== 'Pending') return errorResponse('Only pending reports can be deleted', 409);
+	if (report.status !== 'Pending' && report.status !== 'Open') return errorResponse('Only pending or open reports can be deleted', 409);
 	const deletedAt = new Date().toISOString();
 	const ownershipClause = canManageReports(auth) ? '' : ' AND author_id = ?';
 	const bindings = canManageReports(auth) ? [deletedAt, deletedAt, id] : [deletedAt, deletedAt, id, auth.userId];
-	const result = await env.road_map_db.prepare(`UPDATE reports SET deleted_at = ?, updated_at = ? WHERE id = ? AND status = 'Pending' AND deleted_at IS NULL${ownershipClause}`).bind(...bindings).run();
+	const result = await env.road_map_db.prepare(`UPDATE reports SET deleted_at = ?, updated_at = ? WHERE id = ? AND status IN ('Pending', 'Open') AND deleted_at IS NULL${ownershipClause}`).bind(...bindings).run();
 	if (!result.meta.changes) return errorResponse('Report changed; reload and try again', 409);
 	return json({ id, deleted: true });
 }
@@ -181,6 +191,52 @@ export async function resolveReport(env, id, auth) {
 	}
 	return getReport(env, id, 200, auth);
 }
+
+// Vote functions
+const VOTABLE_STATUSES = new Set(['Open', 'Resolved']);
+
+async function getUserVoteStatus(env, reportId, userId) {
+	const vote = await env.road_map_db.prepare('SELECT 1 FROM report_votes WHERE report_id = ? AND user_id = ?').bind(reportId, userId).first();
+	return !!vote;
+}
+
+export async function voteReport(env, reportId, userId) {
+	if (!Number.isSafeInteger(reportId) || reportId < 1) return errorResponse('Report not found', 404);
+	
+	const report = await env.road_map_db.prepare('SELECT status FROM reports WHERE id = ? AND deleted_at IS NULL').bind(reportId).first();
+	if (!report) return errorResponse('Report not found', 404);
+	if (!VOTABLE_STATUSES.has(report.status)) return errorResponse('Voting is only allowed on Open or Resolved reports', 409);
+
+	const existingVote = await env.road_map_db.prepare('SELECT 1 FROM report_votes WHERE report_id = ? AND user_id = ?').bind(reportId, userId).first();
+	if (existingVote) {
+		// User already voted - remove vote (toggle off)
+		const deleteResult = await env.road_map_db.prepare('DELETE FROM report_votes WHERE report_id = ? AND user_id = ?').bind(reportId, userId).run();
+		if (deleteResult.meta.changes) {
+			await env.road_map_db.prepare('UPDATE reports SET vote_count = vote_count - 1 WHERE id = ?').bind(reportId).run();
+		}
+		const newVoteCount = await env.road_map_db.prepare('SELECT vote_count FROM reports WHERE id = ?').bind(reportId).first();
+		return json({ voteCount: newVoteCount?.vote_count ?? 0, hasVoted: false });
+	}
+
+	// Add vote (toggle on)
+	const insertResult = await env.road_map_db.prepare('INSERT INTO report_votes (report_id, user_id) VALUES (?, ?)').bind(reportId, userId).run();
+	if (insertResult.meta.changes) {
+		await env.road_map_db.prepare('UPDATE reports SET vote_count = vote_count + 1 WHERE id = ?').bind(reportId).run();
+	}
+	const newVoteCount = await env.road_map_db.prepare('SELECT vote_count FROM reports WHERE id = ?').bind(reportId).first();
+	return json({ voteCount: newVoteCount?.vote_count ?? 0, hasVoted: true });
+}
+
+export async function getVoteStatus(env, reportId, userId) {
+	if (!Number.isSafeInteger(reportId) || reportId < 1) return errorResponse('Report not found', 404);
+	
+	const report = await env.road_map_db.prepare('SELECT vote_count FROM reports WHERE id = ? AND deleted_at IS NULL').bind(reportId).first();
+	if (!report) return errorResponse('Report not found', 404);
+	
+	const hasVoted = userId ? await getUserVoteStatus(env, reportId, userId) : false;
+	return json({ voteCount: report.vote_count, hasVoted });
+}
+
 function formValue(form, key, fallback = null) { const value = form.get(key); return typeof value === 'string' ? value : fallback; }
 async function parseBody(request) {
 	if (request.headers.get('content-type')?.includes('multipart/form-data')) {

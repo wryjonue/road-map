@@ -54,11 +54,32 @@ function AuthorAvatar({ src, name }) {
 	return <div className={styles.avatar}>{src && !failed ? <img src={src} alt={`${name || 'Report author'} avatar`} onError={() => setFailed(true)} /> : initials}</div>;
 }
 
-export default function ReportPostCard({ title, avatar, poster, authorImageUrl, date, status, description, votes, comments, imageUrl, images, staticMapUrl, canChangeStatus, isStatusUpdating, isBusy, onStatusChange }) {
+export default function ReportPostCard({ id, title, avatar, poster, authorImageUrl, date, status, description, votes, comments, imageUrl, images, staticMapUrl, canChangeStatus, canDelete, isStatusUpdating, isBusy, onStatusChange, onDelete, onVote }) {
 	const statusClass = `status-badge status-${status.toLowerCase()}`;
-	const nextStatus = status === 'Pending' ? 'Open' : status === 'Open' ? 'Resolved' : null;
+	const statusOptions = canChangeStatus && status === 'Pending'
+		? [{ label: 'Approve Report', value: 'Open' }, { label: 'Deny Report', value: 'Rejected' }]
+		: canChangeStatus && status === 'Open' ? [{ label: 'Resolve report', value: 'Resolved' }] : [];
+	if (canDelete && (status === 'Pending' || status === 'Open')) statusOptions.push({ label: 'Delete', value: 'Delete' });
 	const reportImageUrl = images?.[0]?.url || imageUrl;
 	const hasImage = Boolean(reportImageUrl);
+
+	const [voteCount, setVoteCount] = useState(votes);
+	const [hasVoted, setHasVoted] = useState(false);
+	const [isVoting, setIsVoting] = useState(false);
+
+	const handleVote = async () => {
+		if (isVoting || !onVote) return;
+		setIsVoting(true);
+		try {
+			const result = await onVote(id);
+			if (result) {
+				setVoteCount(result.voteCount);
+				setHasVoted(result.hasVoted);
+			}
+		} finally {
+			setIsVoting(false);
+		}
+	};
 
 	return (
 		<article className={styles.card}>
@@ -70,7 +91,10 @@ export default function ReportPostCard({ title, avatar, poster, authorImageUrl, 
 						<p>{poster} · {date}</p>
 					</div>
 				</div>
-				{canChangeStatus && nextStatus ? <button type="button" className={statusClass} onClick={() => onStatusChange(nextStatus)} disabled={isBusy} aria-label={`Change report status from ${status} to ${nextStatus}`} title={`Change status to ${nextStatus}`}>{isStatusUpdating ? 'Updating...' : status}</button> : <span className={statusClass}>{status}</span>}
+				{(canChangeStatus || canDelete) && statusOptions.length > 0 ? <select className={statusClass} value={status} onChange={(event) => event.target.value === 'Delete' ? onDelete() : onStatusChange(event.target.value)} disabled={isBusy} aria-label={`Change report status from ${status}`}>
+					<option value={status}>{isStatusUpdating ? 'Updating...' : status}</option>
+					{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+				</select> : <span className={statusClass}>{status}</span>}
 			</div>
 
 			<div className={`${styles.body} ${!hasImage ? styles.bodyNoImage : ''}`}>
@@ -86,10 +110,19 @@ export default function ReportPostCard({ title, avatar, poster, authorImageUrl, 
 			<div className={styles.footer}>
 				<div className={styles.actions}>
 					<button type="button" className="primary-btn">View Details</button>
-					<button type="button" className="secondary-btn">Upvote</button>
+					<button
+						type="button"
+						className={`secondary-btn vote-button ${hasVoted ? 'voted' : ''}`}
+						onClick={handleVote}
+						disabled={isVoting}
+						aria-pressed={hasVoted}
+						aria-label={hasVoted ? 'Remove upvote' : 'Upvote report'}
+					>
+						{isVoting ? 'Voting...' : 'Upvote'}
+					</button>
 				</div>
 				<div className={styles.actions}>
-					<button type="button" className="secondary-btn unclickable-btn">Votes ({votes})</button>
+					<button type="button" className="secondary-btn unclickable-btn">Votes ({voteCount})</button>
 					<button type="button" className="ghost-btn unclickable-btn">Comments ({comments})</button>
 				</div>
 			</div>

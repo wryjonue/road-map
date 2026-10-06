@@ -1,4 +1,4 @@
-import { approveReport, createReport, deletePendingReport, getMapReports, getMedia, getReport, listReports, resolveReport } from './report-service.js';
+import { approveReport, createReport, deletePendingReport, getMapReports, getMedia, getReport, getVoteStatus, listReports, rejectReport, resolveReport, voteReport } from './report-service.js';
 import { getDashboardMetrics } from './dashboard-service.js';
 import { getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
@@ -42,8 +42,9 @@ export default {
 				let body;
 				try { body = await request.json(); } catch { return Response.json({ error: 'Request body must be valid JSON' }, { status: 400 }); }
 				if (body?.status === 'Open') return approveReport(env, Number(statusMatch[1]), auth);
+				if (body?.status === 'Rejected') return rejectReport(env, Number(statusMatch[1]), auth);
 				if (body?.status === 'Resolved') return resolveReport(env, Number(statusMatch[1]), auth);
-				return Response.json({ error: 'Only Open and Resolved statuses are supported' }, { status: 400 });
+				return Response.json({ error: 'Only Open, Rejected, and Resolved statuses are supported' }, { status: 400 });
 			}
 			const deleteMatch = url.pathname.match(/^\/api\/reports\/(\d+)$/);
 			if (deleteMatch && request.method === 'DELETE') {
@@ -51,6 +52,18 @@ export default {
 				if (auth instanceof Response) return auth;
 				return deletePendingReport(env, Number(deleteMatch[1]), auth);
 			}
+const voteMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
+		if (voteMatch && request.method === 'POST') {
+			const auth = await requireUser(request, env);
+			if (auth instanceof Response) return auth;
+			return voteReport(env, Number(voteMatch[1]), auth.userId);
+		}
+		const voteStatusMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
+		if (voteStatusMatch && request.method === 'GET') {
+			const auth = await getOptionalUser(request, env);
+			if (auth instanceof Response) return auth;
+			return getVoteStatus(env, Number(voteStatusMatch[1]), auth?.userId ?? null);
+		}
 			const mediaMatch = url.pathname.match(/^\/api\/media\/(.+)$/);
 			if (mediaMatch) {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });

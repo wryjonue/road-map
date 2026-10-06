@@ -9,6 +9,17 @@ import styles from './CreateReportPage.module.css';
 const BATAAN_CENTER = [120.5394, 14.6779];
 const initialLocation = { barangay: '', city: '', province: '', address: '', roadName: '', snapDistance: null, coordinates: null };
 
+async function readApiResponse(response, fallbackMessage) {
+	const contentType = response.headers.get('content-type') || '';
+	if (!contentType.toLowerCase().includes('application/json')) {
+		const responseType = contentType.toLowerCase().includes('text/html') ? 'an HTML page' : 'an unexpected response';
+		throw new Error(`${fallbackMessage} (${response.status}). The server returned ${responseType} instead of JSON.`);
+	}
+	const data = await response.json();
+	if (!response.ok) throw new Error(data.error || fallbackMessage);
+	return data;
+}
+
 export default function CreateReportPage() {
 	const navigate = useNavigate();
 	const mapContainer = useRef(null);
@@ -53,8 +64,7 @@ export default function CreateReportPage() {
 					headers: token ? { Authorization: `Bearer ${token}` } : { 'X-Local-Mock-Auth': 'true' },
 					signal: controller.signal,
 				});
-				const result = await response.json();
-				if (!response.ok) throw new Error(result.error || 'Unable to resolve this location');
+				const result = await readApiResponse(response, 'Unable to resolve this location');
 				if (controller.signal.aborted || requestController.current !== controller) return;
 				marker.setLngLat([result.longitude, result.latitude]);
 				setLocation({ barangay: result.barangay, city: result.city, province: result.province, address: result.address, roadName: result.roadName, snapDistance: result.snapDistance, coordinates: { lat: result.latitude, lng: result.longitude } });
@@ -111,8 +121,7 @@ export default function CreateReportPage() {
 				headers: token ? { Authorization: `Bearer ${token}` } : { 'X-Local-Mock-Auth': 'true' },
 				body: payload,
 			});
-			const data = await response.json();
-			if (!response.ok) throw new Error(data.error || 'Unable to create report');
+			const data = await readApiResponse(response, 'Unable to create report');
 			console.log('Incident report submitted:', data);
 			alert('Incident report created successfully.');
 			navigate('/feed');

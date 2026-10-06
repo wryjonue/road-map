@@ -22,7 +22,7 @@ RoadMap is a website for reporting road hazards, viewing incident locations in t
 - MapLibre GL + OpenStreetMap tiles for **2D Maps**
 - Chart.js for **Dashboard Graphs**
 - Geoapify for **Static Maps and Map Matching**
-- Nominatim **Reverse Geocoding**
+- Nominatim for **Reverse Geocoding**
 ---
 ## Setup
 

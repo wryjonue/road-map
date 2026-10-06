@@ -4,7 +4,7 @@ import { normalizeRole } from './auth.js';
 import worker from './index.js';
 import categories from '../src/data/categories.js';
 import { resolveRoadLocation } from './location-service.js';
-import { approveReport, createReport, deletePendingReport, getMapReports, getMedia, getReport, listReports, resolveReport } from './report-service.js';
+import { approveReport, createReport, deletePendingReport, getMapReports, getMedia, getReport, listReports, rejectReport, resolveReport } from './report-service.js';
 
 function reportRow({ id, status, authorId = 'reporter-1', authorName = null, authorImageUrl = null, mapKey = null, imageKey = null, deletedAt = null }) {
 	return {
@@ -147,8 +147,15 @@ class FakeDatabase {
 					row.updated_at = values[0];
 					return { meta: { changes: 1 } };
 				}
+				if (sql.startsWith("UPDATE reports SET status = 'Rejected'")) {
+					const row = database.rows.find((item) => item.id === values[1] && item.deleted_at === null && item.status === 'Pending');
+					if (!row) return { meta: { changes: 0 } };
+					row.status = 'Rejected';
+					row.updated_at = values[0];
+					return { meta: { changes: 1 } };
+				}
 				if (sql.startsWith('UPDATE reports SET deleted_at')) {
-					const row = database.rows.find((item) => item.id === values[2] && item.deleted_at === null && item.status === 'Pending' && (values.length < 4 || item.author_id === values[3]));
+					const row = database.rows.find((item) => item.id === values[2] && item.deleted_at === null && (item.status === 'Pending' || item.status === 'Open') && (values.length < 4 || item.author_id === values[3]));
 					if (!row) return { meta: { changes: 0 } };
 					row.deleted_at = values[0];
 					row.updated_at = values[1];
@@ -259,6 +266,20 @@ test('approval only accepts active pending reports', async () => {
 	assert.equal((await approveReport(env, 99, { userId: 'authority-1', role: 'authority' })).status, 404);
 });
 
+test('authority and admin can reject pending reports, while regular users and non-pending reports cannot', async () => {
+	for (const role of ['authority', 'admin']) {
+		const { env, database } = createEnvironment([reportRow({ id: 1, status: 'Pending' })]);
+		const response = await rejectReport(env, 1, { userId: `${role}-1`, role });
+		const data = await response.json();
+		assert.equal(data.status, 'Rejected');
+		assert.equal(database.rows[0].status, 'Rejected');
+	}
+	const { env: userEnv } = createEnvironment([reportRow({ id: 1, status: 'Pending' })]);
+	assert.equal((await rejectReport(userEnv, 1, { userId: 'reporter-1', role: 'user' })).status, 403);
+	const { env: openEnv } = createEnvironment([reportRow({ id: 1, status: 'Open' })]);
+	assert.equal((await rejectReport(openEnv, 1, { userId: 'authority-1', role: 'authority' })).status, 409);
+});
+
 test('authority and admin can soft-delete pending reports only', async () => {
 	for (const role of ['authority', 'admin']) {
 		const { env, database } = createEnvironment([reportRow({ id: 1, status: 'Pending' })]);
@@ -281,15 +302,28 @@ test('report owners can delete their own pending reports, but not another user\'
 	assert.equal(database.rows[1].deleted_at, null);
 });
 
-test('deletion rejects missing, previously deleted, and non-pending reports', async () => {
+test('staff can delete open reports, while resolved, missing, and previously deleted reports are rejected', async () => {
 	const { env } = createEnvironment([
 		reportRow({ id: 1, status: 'Open' }),
 		reportRow({ id: 2, status: 'Pending', deletedAt: '2026-10-02T00:00:00.000Z' }),
+		reportRow({ id: 3, status: 'Resolved' }),
 	]);
 	const staff = { userId: 'authority-1', role: 'authority' };
-	assert.equal((await deletePendingReport(env, 1, staff)).status, 409);
+	assert.equal((await deletePendingReport(env, 1, staff)).status, 200);
 	assert.equal((await deletePendingReport(env, 2, staff)).status, 404);
+	assert.equal((await deletePendingReport(env, 3, staff)).status, 409);
 	assert.equal((await deletePendingReport(env, 99, staff)).status, 404);
+});
+
+test('report owners can delete their own open reports but not another user\'s open reports', async () => {
+	const { env, database } = createEnvironment([
+		reportRow({ id: 1, status: 'Open', authorId: 'reporter-1' }),
+		reportRow({ id: 2, status: 'Open', authorId: 'reporter-2' }),
+	]);
+	const owner = { userId: 'reporter-1', role: 'user' };
+	assert.equal((await deletePendingReport(env, 1, owner)).status, 200);
+	assert.equal((await deletePendingReport(env, 2, owner)).status, 404);
+	assert.equal(database.rows[1].deleted_at, null);
 });
 
 test('only authority and admin can resolve, and pending reports must be approved first', async () => {
