@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { BarController, BarElement, CategoryScale, Chart, LineController, LineElement, LinearScale, PointElement, Tooltip } from 'chart.js';
+import MonthlyIncidentReport from '../components/MonthlyIncidentReport';
 import styles from './Dashboard.module.css';
 
 Chart.register(BarController, BarElement, CategoryScale, LineController, LineElement, LinearScale, PointElement, Tooltip);
@@ -136,6 +137,7 @@ export default function Dashboard() {
 				{metrics && <div className={styles.chartFrame}><canvas ref={chartCanvas} role="img" aria-label="Bar chart of report counts by category" /></div>}
 				{!isLoading && !error && metrics?.total === 0 && <p className={styles.emptyState}>No reports to display yet.</p>}
 			</section>
+				<MonthlyIncidentReport />
 		</section>
 	);
 }

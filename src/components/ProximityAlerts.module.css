@@ -1,0 +1,124 @@
+.panel {
+	display: grid;
+	gap: 12px;
+	padding: 16px;
+	border: 2px solid var(--border);
+	background: var(--surface);
+}
+
+.panelHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.panelHeader h2 {
+	margin: 0;
+	font-size: 1rem;
+}
+
+.thresholdControl {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.thresholdControl span {
+	font-size: .76rem;
+	font-weight: 700;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.thresholdControl select {
+	min-height: 34px;
+	padding: 4px 28px 4px 8px;
+	border: 2px solid var(--border);
+	background: var(--surface);
+	color: var(--text);
+	font-size: .82rem;
+}
+
+.thresholdControl select:focus-visible {
+	outline: 3px solid var(--primary);
+	outline-offset: 2px;
+}
+
+.alertList {
+	display: grid;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.alertItem {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	background: rgba(192, 57, 43, .06);
+}
+
+.alertIcon {
+	flex: 0 0 auto;
+	font-size: 1.1rem;
+	line-height: 1;
+	margin-top: 1px;
+}
+
+.alertBody {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.alertTitle {
+	font-size: .85rem;
+	font-weight: 700;
+	line-height: 1.35;
+}
+
+.alertMeta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	font-size: .75rem;
+	color: var(--muted);
+}
+
+.alertDistance {
+	font-weight: 700;
+	color: var(--danger);
+}
+
+.empty {
+	margin: 0;
+	padding: 10px 12px;
+	color: var(--muted);
+	font-size: .82rem;
+}
+
+.referenceNote {
+	margin: 0;
+	color: var(--muted);
+	font-size: .72rem;
+}
+
+@media (max-width: 720px) {
+	.panelHeader {
+		align-items: flex-start;
+	}
+
+	.thresholdControl {
+		width: 100%;
+	}
+
+	.thresholdControl select {
+		flex: 1;
+	}
+}

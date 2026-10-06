@@ -1,5 +1,5 @@
 import { approveReport, createReport, deletePendingReport, getMapReports, getMedia, getReport, getVoteStatus, listReports, rejectReport, resolveReport, voteReport } from './report-service.js';
-import { getDashboardMetrics } from './dashboard-service.js';
+import { getDashboardMetrics, getMonthlyReport } from './dashboard-service.js';
 import { getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
@@ -26,6 +26,14 @@ export default {
 				const auth = await getOptionalUser(request, env);
 				if (auth instanceof Response) return auth;
 				return getDashboardMetrics(env);
+			}
+			if (url.pathname === '/api/dashboard/monthly-report') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await getOptionalUser(request, env);
+				if (auth instanceof Response) return auth;
+				const month = url.searchParams.get('month');
+				if (!month) return Response.json({ error: 'Month parameter is required (YYYY-MM)' }, { status: 400 });
+				return getMonthlyReport(env, month);
 			}
 			if (url.pathname === '/api/map/reports') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });

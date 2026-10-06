@@ -26,3 +26,35 @@ export async function getDashboardMetrics(env) {
 	const monthlyReports = monthlyResults.map((row) => ({ month: row.report_month, count: Number(row.report_count) || 0 }));
 	return Response.json({ total, resolved, resolvedPercentage, categories, monthlyReports }, { headers: { 'Cache-Control': 'no-store' } });
 }
+
+export async function getMonthlyReport(env, month) {
+	if (!/^\d{4}-\d{2}$/.test(month)) return Response.json({ error: 'Month must be in YYYY-MM format' }, { status: 400 });
+	const start = `${month}-01T00:00:00Z`;
+	const [year, mon] = month.split('-').map(Number);
+	const nextMonth = mon === 12 ? 1 : mon + 1;
+	const nextYear = mon === 12 ? year + 1 : year;
+	const end = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00Z`;
+	const { results: summaryRows } = await env.road_map_db.prepare(`
+		SELECT COUNT(*) AS total,
+			COALESCE(SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END), 0) AS resolved,
+			COALESCE(SUM(CASE WHEN status != 'Resolved' THEN 1 ELSE 0 END), 0) AS unresolved
+		FROM reports
+		WHERE deleted_at IS NULL AND created_at >= ? AND created_at < ?
+	`).bind(start, end).all();
+	const summary = summaryRows[0] || { total: 0, resolved: 0, unresolved: 0 };
+	const { results: locationRows } = await env.road_map_db.prepare(`
+		SELECT COALESCE(NULLIF(barangay, ''), NULLIF(city, ''), NULLIF(province, ''), 'Unknown location') AS area,
+			COUNT(*) AS count
+		FROM reports
+		WHERE deleted_at IS NULL AND created_at >= ? AND created_at < ?
+		GROUP BY area
+		ORDER BY count DESC
+	`).bind(start, end).all();
+	return Response.json({
+		month,
+		total: Number(summary.total) || 0,
+		resolved: Number(summary.resolved) || 0,
+		unresolved: Number(summary.unresolved) || 0,
+		byArea: locationRows.map((row) => ({ area: row.area, count: Number(row.count) || 0 })),
+	}, { headers: { 'Cache-Control': 'no-store' } });
+}

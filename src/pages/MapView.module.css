@@ -160,6 +160,65 @@
 	pointer-events: none;
 }
 
+.locateButton {
+	position: absolute;
+	bottom: 16px;
+	right: 16px;
+	width: 42px;
+	height: 42px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 2px solid var(--border);
+	background: rgba(255, 255, 255, .97);
+	color: var(--text);
+	font-size: 1.35rem;
+	cursor: pointer;
+	box-shadow: 2px 2px 0 rgba(23, 23, 23, .15);
+	z-index: 2;
+}
+
+.locateButton:hover {
+	background: #f0f0f0;
+}
+
+.locateButton:focus-visible {
+	outline: 3px solid var(--primary);
+	outline-offset: 2px;
+}
+
+.locateActive {
+	background: #3b82f6;
+	color: white;
+	border-color: #2563eb;
+}
+
+.locateActive:hover {
+	background: #2563eb;
+}
+
+.locationStatus {
+	position: absolute;
+	bottom: 16px;
+	left: 50%;
+	max-width: calc(100% - 80px);
+	transform: translateX(-50%);
+	padding: 8px 14px;
+	border: 1px solid var(--border);
+	background: rgba(255, 255, 255, .95);
+	color: var(--muted);
+	font-size: .78rem;
+	text-align: center;
+	pointer-events: none;
+	z-index: 2;
+}
+
+.locationStatus[role='alert'] {
+	border-color: var(--danger);
+	color: var(--danger);
+	background: rgba(192, 57, 43, .08);
+}
+
 .preview {
 	position: absolute;
 	top: 12px;

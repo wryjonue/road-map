@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@clerk/react';
 import * as maplibregl from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import categories from '../data/categories';
+import ProximityAlerts from '../components/ProximityAlerts';
+import { haversineDistanceMeters } from '../utils/geo';
 import styles from './MapView.module.css';
 
 const SOURCE_ID = 'road-reports';
@@ -50,7 +52,26 @@ export default function MapView() {
 	const [selectedReportId, setSelectedReportId] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState('');
+	const [userLocation, setUserLocation] = useState(null);
+	const [locationError, setLocationError] = useState('');
+	const [autoCenter, setAutoCenter] = useState(true);
+	const [hasInitialFix, setHasInitialFix] = useState(false);
+	const [proximityThreshold, setProximityThreshold] = useState(300);
 	const selectedReport = reports.find((report) => report.id === selectedReportId) || null;
+
+	const { nearbyReports, referenceLabel } = useMemo(() => {
+		const refCoords = userLocation || [120.5394262, 14.6779294];
+		const label = userLocation ? 'Distance from your current location' : 'Distance from map center (location unavailable)';
+		const nearby = reports
+			.filter((report) => report.status === 'Open')
+			.map((report) => ({
+				...report,
+				distanceMeters: haversineDistanceMeters(refCoords, [report.location.longitude, report.location.latitude]),
+			}))
+			.filter((report) => report.distanceMeters <= proximityThreshold)
+			.sort((a, b) => a.distanceMeters - b.distanceMeters);
+		return { nearbyReports: nearby, referenceLabel: label };
+	}, [reports, userLocation, proximityThreshold]);
 
 	useEffect(() => {
 		if (!isLoaded) return undefined;
@@ -159,6 +180,33 @@ export default function MapView() {
 				},
 			});
 
+			map.addSource('user-location', {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: [] },
+			});
+			map.addLayer({
+				id: 'user-location-pulse',
+				type: 'circle',
+				source: 'user-location',
+				paint: {
+					'circle-color': 'rgba(59, 130, 246, 0.25)',
+					'circle-radius': 18,
+					'circle-stroke-color': 'rgba(59, 130, 246, 0.4)',
+					'circle-stroke-width': 2,
+				},
+			});
+			map.addLayer({
+				id: 'user-location-dot',
+				type: 'circle',
+				source: 'user-location',
+				paint: {
+					'circle-color': '#3b82f6',
+					'circle-radius': 7,
+					'circle-stroke-color': '#ffffff',
+					'circle-stroke-width': 2.5,
+				},
+			});
+
 			map.on('click', 'report-clusters', async (event) => {
 				const feature = event.features?.[0];
 				const clusterId = feature?.properties?.cluster_id;
@@ -207,6 +255,50 @@ export default function MapView() {
 			['==', ['get', 'reportId'], selectedReportId ?? -1],
 		]);
 	}, [isMapLoaded, selectedReportId]);
+
+	useEffect(() => {
+		if (!isMapLoaded || !navigator.geolocation) return undefined;
+		setLocationError('');
+		const watcherId = navigator.geolocation.watchPosition(
+			(position) => {
+				const coords = [position.coords.longitude, position.coords.latitude];
+				setUserLocation(coords);
+				setLocationError('');
+				if (!hasInitialFix) {
+					setHasInitialFix(true);
+					if (autoCenter) {
+						mapRef.current?.flyTo({ center: coords, zoom: 14, duration: 1500 });
+					}
+				} else if (autoCenter) {
+					mapRef.current?.easeTo({ center: coords, duration: 800 });
+				}
+			},
+			(geoError) => {
+				if (geoError.code === geoError.PERMISSION_DENIED) {
+					setLocationError('Location permission denied.');
+				} else if (geoError.code === geoError.TIMEOUT) {
+					setLocationError('Location request timed out.');
+				} else {
+					setLocationError('Unable to determine your location.');
+				}
+				setUserLocation(null);
+			},
+			{ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+		);
+		return () => {
+			navigator.geolocation.clearWatch(watcherId);
+		};
+	}, [isMapLoaded, autoCenter, hasInitialFix]);
+
+	useEffect(() => {
+		if (!isMapLoaded) return;
+		const source = mapRef.current?.getSource('user-location');
+		if (!source) return;
+		const data = userLocation
+			? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: userLocation } }] }
+			: { type: 'FeatureCollection', features: [] };
+		source.setData(data);
+	}, [isMapLoaded, userLocation]);
 
 	const legendItems = colorMode === 'status'
 		? Object.entries(STATUS_COLORS).map(([name, color]) => ({ name, color }))
@@ -261,9 +353,36 @@ export default function MapView() {
 					<p className={styles.previewDescription}>{selectedReport.description}</p>
 					<small>{new Date(selectedReport.createdAt).toLocaleString()}</small>
 				</aside>}
-				{isLoading && <div className={styles.mapStatus} role="status">Loading report locations...</div>}
-				{!isLoading && !error && reports.length === 0 && <div className={styles.mapStatus} role="status">No matching report locations.</div>}
+					<button
+						type="button"
+						className={`${styles.locateButton} ${autoCenter ? styles.locateActive : ''}`}
+						onClick={() => {
+							if (!userLocation) {
+								setAutoCenter(true);
+								setHasInitialFix(false);
+								return;
+							}
+							const next = !autoCenter;
+							setAutoCenter(next);
+							if (next) mapRef.current?.flyTo({ center: userLocation, zoom: 14, duration: 1200 });
+						}}
+						aria-label={autoCenter ? 'Disable auto-center' : 'Center on my location'}
+						title={autoCenter ? 'Auto-centering enabled' : 'Center on my location'}
+					>
+						⌖
+					</button>
+					{locationError && <div className={styles.locationStatus} role="alert">{locationError}</div>}
+					{!locationError && !userLocation && isMapLoaded && <div className={styles.locationStatus} role="status">Requesting location…</div>}
+					{isLoading && <div className={styles.mapStatus} role="status">Loading report locations...</div>}
+					{!isLoading && !error && reports.length === 0 && <div className={styles.mapStatus} role="status">No matching report locations.</div>}
 			</div>
+
+			<ProximityAlerts
+					nearbyReports={nearbyReports}
+					threshold={proximityThreshold}
+					onThresholdChange={setProximityThreshold}
+					referenceLabel={referenceLabel}
+			/>
 		</section>
 	);
 }
