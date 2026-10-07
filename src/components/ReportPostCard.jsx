@@ -3,6 +3,18 @@ import { Link } from 'react-router';
 import { useAuth } from '@clerk/react';
 import styles from './ReportPostCard.module.css';
 
+const CATEGORY_COLORS = {
+	1: '#c65d2e',
+	2: '#bd3e50',
+	3: '#8b6aad',
+	4: '#27829a',
+	5: '#607d35',
+	6: '#c28a22',
+	7: '#376fa3',
+	8: '#aa4776',
+	9: '#5f6972',
+};
+
 function AuthenticatedMediaImage({ src, alt, className }) {
 	const { getToken, isLoaded } = useAuth();
 	const [objectUrl, setObjectUrl] = useState('');
@@ -55,7 +67,7 @@ function AuthorAvatar({ src, name }) {
 	return <div className={styles.avatar}>{src && !failed ? <img src={src} alt={`${name || 'Report author'} avatar`} onError={() => setFailed(true)} /> : initials}</div>;
 }
 
-export default function ReportPostCard({ id, title, avatar, poster, authorImageUrl, date, status, description, votes, comments, imageUrl, images, staticMapUrl, canChangeStatus, canDelete, isStatusUpdating, isBusy, onStatusChange, onDelete, onVote }) {
+export default function ReportPostCard({ id, title, avatar, poster, authorImageUrl, date, status, description, votes, comments, imageUrl, images, staticMapUrl, category, canChangeStatus, canDelete, isStatusUpdating, isBusy, onStatusChange, onDelete, onVote }) {
 	const statusClass = `status-badge status-${status.toLowerCase()}`;
 	const statusOptions = canChangeStatus && status === 'Pending'
 		? [{ label: 'Approve Report', value: 'Open' }, { label: 'Deny Report', value: 'Rejected' }]
@@ -86,10 +98,13 @@ export default function ReportPostCard({ id, title, avatar, poster, authorImageU
 		<article className={styles.card}>
 			<div className={styles.header}>
 				<div className={styles.posterMeta}>
-					<AuthorAvatar src={authorImageUrl} name={poster || avatar} />
-					<div>
-						<h3>{title}</h3>
-						<p>{poster} · {date}</p>
+					{category && <span className={styles.categoryBadge} style={{ '--category-color': CATEGORY_COLORS[category.id] || '#5f6972' }}>{category.name}</span>}
+					<div className={styles.posterRow}>
+						<AuthorAvatar src={authorImageUrl} name={poster || avatar} />
+						<div>
+							<h3>{title}</h3>
+							<p>{poster} · {date}</p>
+						</div>
 					</div>
 				</div>
 				{(canChangeStatus || canDelete) && statusOptions.length > 0 ? <select className={statusClass} value={status} onChange={(event) => event.target.value === 'Delete' ? onDelete() : onStatusChange(event.target.value)} disabled={isBusy} aria-label={`Change report status from ${status}`}>

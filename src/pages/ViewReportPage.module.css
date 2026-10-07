@@ -46,6 +46,7 @@
 	margin: 0;
 	font-size: 1.5rem;
 	line-height: 1.3;
+	color: var(--primary);
 }
 
 .meta {

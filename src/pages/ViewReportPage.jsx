@@ -189,17 +189,13 @@ export default function ViewReportPage() {
 	const statusClass = `status-badge status-${report.status.toLowerCase()}`;
 	const reportImageUrl = report.images?.[0]?.url || report.imageUrl;
 
-	const statusActions = [];
-	if (canManage) {
-		if (report.status === 'Pending') {
-			statusActions.push({ label: 'Approve', value: 'Open', className: 'primary-btn' });
-			statusActions.push({ label: 'Reject', value: 'Rejected', className: 'ghost-btn danger-btn' });
-		} else if (report.status === 'Open') {
-			statusActions.push({ label: 'Resolve', value: 'Resolved', className: 'primary-btn' });
-		}
-	}
+	const statusOptions = canManage && report.status === 'Pending'
+		? [{ label: 'Approve Report', value: 'Open' }, { label: 'Deny Report', value: 'Rejected' }]
+		: canManage && report.status === 'Open'
+			? [{ label: 'Resolve report', value: 'Resolved' }]
+			: [];
 	if (canDelete && (report.status === 'Pending' || report.status === 'Open')) {
-		statusActions.push({ label: 'Delete', value: 'Delete', className: 'ghost-btn danger-btn' });
+		statusOptions.push({ label: 'Delete', value: 'Delete' });
 	}
 
 	return (
@@ -208,18 +204,18 @@ export default function ViewReportPage() {
 			<div className={styles.header}>
 				<button type="button" className="ghost-btn" onClick={() => navigate('/feed')}>← Back to Feed</button>
 				<div className={styles.headerActions}>
-					<span className={statusClass}>{report.status}</span>
-					{statusActions.map((action) => (
-						<button
-							key={action.value}
-							type="button"
-							className={action.className}
-							onClick={() => action.value === 'Delete' ? deleteReport() : updateStatus(action.value)}
+					{(canManage || canDelete) && statusOptions.length > 0
+						? <select
+							className={statusClass}
+							value={report.status}
+							onChange={(event) => event.target.value === 'Delete' ? deleteReport() : updateStatus(event.target.value)}
 							disabled={isMutating}
+							aria-label={`Change report status from ${report.status}`}
 						>
-							{isMutating ? 'Processing...' : action.label}
-						</button>
-					))}
+							<option value={report.status}>{isMutating ? 'Updating...' : report.status}</option>
+							{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+						</select>
+						: <span className={statusClass}>{report.status}</span>}
 				</div>
 			</div>
 
