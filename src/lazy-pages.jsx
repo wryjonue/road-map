@@ -9,3 +9,4 @@ export const MapView = lazy(() => import('./pages/MapView'));
 export const About = lazy(() => import('./pages/About'));
 export const SignInPage = lazy(() => import('./pages/SignInPage'));
 export const SignUpPage = lazy(() => import('./pages/SignUpPage'));
+export const ViewReportPage = lazy(() => import('./pages/ViewReportPage'));

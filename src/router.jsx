@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import RootLayout from './components/RootLayout';
 import RequireRole from './components/RequireRole';
-import { About, CreateReportPage, Dashboard, FeedPage, Home, MapView, SignInPage, SignUpPage, TicketsPage } from './lazy-pages';
+import { About, CreateReportPage, Dashboard, FeedPage, Home, MapView, SignInPage, SignUpPage, TicketsPage, ViewReportPage } from './lazy-pages';
 import { ROUTE_ENABLED } from './route-flags';
 
 function renderPage(Page) {
@@ -18,6 +18,7 @@ export const router = createBrowserRouter([
 			{ path: 'dashboard', element: renderPage(Dashboard) },
 			{ path: 'feed', element: renderPage(FeedPage) },
 			{ path: 'feed/create', element: renderPage(CreateReportPage) },
+			{ path: 'feed/:id', element: renderPage(ViewReportPage) },
 			{ path: 'create-report', element: renderPage(CreateReportPage) },
 			...(ROUTE_ENABLED.tickets ? [{ path: 'tickets', element: <RequireRole roles={['authority', 'admin']}>{renderPage(TicketsPage)}</RequireRole> }] : []),
 			{ path: 'sign-in/*', element: renderPage(SignInPage) },

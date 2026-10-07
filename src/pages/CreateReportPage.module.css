@@ -66,7 +66,10 @@
 .fullWidth {
     grid-column: 1 / -1;
 }
-
+button:disabled {
+    background-color: gray;
+    cursor: not-allowed;
+}
 .preview {
     width: min(240px, 100%);
     max-height: 180px;

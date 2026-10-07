@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { useAuth } from '@clerk/react';
 import styles from './ReportPostCard.module.css';
 
@@ -109,7 +110,7 @@ export default function ReportPostCard({ id, title, avatar, poster, authorImageU
 
 			<div className={styles.footer}>
 				<div className={styles.actions}>
-					<button type="button" className="primary-btn">View Details</button>
+					<Link to={`/feed/${id}`} className="primary-btn action-link">View Details</Link>
 					<button
 						type="button"
 						className={`secondary-btn vote-button ${hasVoted ? 'voted' : ''}`}
