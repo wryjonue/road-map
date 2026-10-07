@@ -1,4 +1,5 @@
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
+import { computeHotspots } from './clustering.js';
 
 const MAX_PAGE_SIZE = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -139,6 +140,46 @@ export async function getMapReports(env, url) {
 	const total = countResult?.total ?? 0;
 	return json({ reports, pagination: { limit, offset, total, hasMore: offset + reports.length < total } });
 }
+const MAX_HOTSPOT_POINTS = 2000;
+
+export async function getHotspots(env, url) {
+	const rawDays = Number(url.searchParams.get('days') ?? 90);
+	const days = Number.isFinite(rawDays) && rawDays > 0 ? Math.min(Math.floor(rawDays), 365) : 90;
+	const rawEps = Number(url.searchParams.get('eps') ?? 300);
+	const eps = Number.isFinite(rawEps) && rawEps > 0 ? Math.min(rawEps, 5000) : 300;
+	const rawMinPts = Number(url.searchParams.get('minPts') ?? 3);
+	const minPts = Number.isInteger(rawMinPts) && rawMinPts > 0 ? Math.min(rawMinPts, 50) : 3;
+
+	const since = new Date(Date.now() - days * 86400000).toISOString();
+
+	let bboxClause = '';
+	const bboxValues = [];
+	const swLng = Number(url.searchParams.get('sw_lng'));
+	const swLat = Number(url.searchParams.get('sw_lat'));
+	const neLng = Number(url.searchParams.get('ne_lng'));
+	const neLat = Number(url.searchParams.get('ne_lat'));
+	if ([swLng, swLat, neLng, neLat].every(Number.isFinite)) {
+		bboxClause = ' AND r.longitude >= ? AND r.longitude <= ? AND r.latitude >= ? AND r.latitude <= ?';
+		bboxValues.push(swLng, neLng, swLat, neLat);
+	}
+
+	const query = `
+		SELECT r.id, r.latitude, r.longitude, r.status, r.category_id
+		FROM reports r
+		WHERE r.deleted_at IS NULL
+			AND r.status IN ('Open', 'Resolved')
+			AND r.latitude IS NOT NULL
+			AND r.longitude IS NOT NULL
+			AND r.created_at >= ?${bboxClause}
+		ORDER BY r.created_at DESC
+		LIMIT ?`;
+	const values = [since, ...bboxValues, MAX_HOTSPOT_POINTS];
+	const { results } = await env.road_map_db.prepare(query).bind(...values).all();
+
+	const geojson = computeHotspots(results, eps, minPts);
+	return json(geojson);
+}
+
 export async function getReport(env, id, status = 200, auth = null) {
 	const report = await findReport(env, id);
 	if (!report || (report.status === 'Pending' && !canReadPending({ status: report.status, author_id: report.authorId }, auth))) return errorResponse('Report not found', 404);

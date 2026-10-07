@@ -1,4 +1,4 @@
-import { approveReport, createReport, deletePendingReport, getMapReports, getMedia, getReport, getVoteStatus, listReports, rejectReport, resolveReport, voteReport } from './report-service.js';
+import { approveReport, createReport, deletePendingReport, getHotspots, getMapReports, getMedia, getReport, getVoteStatus, listReports, rejectReport, resolveReport, voteReport } from './report-service.js';
 import { getDashboardMetrics, getMonthlyReport } from './dashboard-service.js';
 import { getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
@@ -40,6 +40,12 @@ export default {
 				const auth = await getOptionalUser(request, env);
 				if (auth instanceof Response) return auth;
 				return getMapReports(env, url);
+			}
+			if (url.pathname === '/api/hotspots') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await getOptionalUser(request, env);
+				if (auth instanceof Response) return auth;
+				return getHotspots(env, url);
 			}
 			const statusMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/status$/);
 			if (statusMatch) {

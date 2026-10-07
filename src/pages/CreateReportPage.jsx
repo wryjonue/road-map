@@ -23,6 +23,8 @@ async function readApiResponse(response, fallbackMessage) {
 export default function CreateReportPage() {
 	const navigate = useNavigate();
 	const mapContainer = useRef(null);
+	const mapRef = useRef(null);
+	const markerRef = useRef(null);
 	const requestController = useRef(null);
 	const { getToken } = useAuth();
 	const { user } = useUser();
@@ -47,7 +49,9 @@ export default function CreateReportPage() {
 			center: BATAAN_CENTER,
 			zoom: 12,
 		});
+		mapRef.current = map;
 		const marker = new maplibregl.Marker({ draggable: true }).setLngLat(BATAAN_CENTER).addTo(map);
+		markerRef.current = marker;
 
 		const resolveLocation = async () => {
 			const { lat, lng } = marker.getLngLat();
@@ -78,10 +82,29 @@ export default function CreateReportPage() {
 		marker.on('dragend', resolveLocation);
 		return () => {
 			requestController.current?.abort();
+			markerRef.current = null;
+			mapRef.current = null;
 			marker.remove();
 			map.remove();
 		};
 	}, [getToken]);
+
+	useEffect(() => {
+		if (!navigator.geolocation) return undefined;
+		let cancelled = false;
+		navigator.geolocation.getCurrentPosition(
+			(position) => {
+				if (cancelled || !markerRef.current || !mapRef.current) return;
+				const coords = [position.coords.longitude, position.coords.latitude];
+				markerRef.current.setLngLat(coords);
+				mapRef.current.flyTo({ center: coords, zoom: 14, duration: 1200 });
+				setLocation((prev) => ({ ...prev, coordinates: { lat: position.coords.latitude, lng: position.coords.longitude } }));
+			},
+			() => {},
+			{ enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+		);
+		return () => { cancelled = true; };
+	}, []);
 
 	useEffect(() => () => { if (imagePreview) URL.revokeObjectURL(imagePreview); }, [imagePreview]);
 

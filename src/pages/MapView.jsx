@@ -9,6 +9,7 @@ import { haversineDistanceMeters } from '../utils/geo';
 import styles from './MapView.module.css';
 
 const SOURCE_ID = 'road-reports';
+const HOTSPOT_SOURCE_ID = 'hotspots';
 const CATEGORY_COLORS = {
 	1: '#c65d2e',
 	2: '#bd3e50',
@@ -57,6 +58,8 @@ export default function MapView() {
 	const [autoCenter, setAutoCenter] = useState(true);
 	const [hasInitialFix, setHasInitialFix] = useState(false);
 	const [proximityThreshold, setProximityThreshold] = useState(300);
+	const [showHotspots, setShowHotspots] = useState(true);
+	const [hotspots, setHotspots] = useState({ type: 'FeatureCollection', features: [] });
 	const selectedReport = reports.find((report) => report.id === selectedReportId) || null;
 
 	const { nearbyReports, referenceLabel } = useMemo(() => {
@@ -110,6 +113,27 @@ export default function MapView() {
 		void loadReports();
 		return () => controller.abort();
 	}, [categoryFilter, getToken, isLoaded, isSignedIn, statusFilter]);
+
+	useEffect(() => {
+		if (!isLoaded || !showHotspots) return undefined;
+		const controller = new AbortController();
+		const loadHotspots = async () => {
+			try {
+				const token = isSignedIn ? await getToken() : null;
+				const response = await fetch('/api/hotspots?days=90&eps=300&minPts=3', {
+					headers: token ? { Authorization: `Bearer ${token}` } : {},
+					signal: controller.signal,
+				});
+				const data = await response.json();
+				if (!response.ok) throw new Error(data.error || 'Unable to load hotspots');
+				if (!controller.signal.aborted) setHotspots(data);
+			} catch (loadError) {
+				if (loadError.name !== 'AbortError') console.error('Hotspot load failed:', loadError.message);
+			}
+		};
+		void loadHotspots();
+		return () => controller.abort();
+	}, [getToken, isLoaded, isSignedIn, showHotspots]);
 
 	useEffect(() => {
 		if (!mapContainer.current) return undefined;
@@ -179,6 +203,50 @@ export default function MapView() {
 					'circle-stroke-width': 3,
 				},
 			});
+
+			map.addSource(HOTSPOT_SOURCE_ID, {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: [] },
+			});
+			map.addLayer({
+				id: 'hotspot-circles',
+				type: 'circle',
+				source: HOTSPOT_SOURCE_ID,
+				paint: {
+					'circle-color': '#e74c3c',
+					'circle-opacity': 0.35,
+					'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 3, 18, 10, 36, 30, 60],
+					'circle-stroke-color': '#e74c3c',
+					'circle-stroke-width': 1.5,
+					'circle-stroke-opacity': 0.6,
+				},
+			});
+			map.addLayer({
+				id: 'hotspot-labels',
+				type: 'symbol',
+				source: HOTSPOT_SOURCE_ID,
+				layout: {
+					'text-field': ['concat', ['get', 'count'], ' incidents'],
+					'text-size': 11,
+					'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+					'text-offset': [0, 1.8],
+					'text-anchor': 'top',
+				},
+				paint: {
+					'text-color': '#c0392b',
+					'text-halo-color': '#ffffff',
+					'text-halo-width': 1.5,
+				},
+			});
+
+			map.on('click', 'hotspot-circles', (event) => {
+				const feature = event.features?.[0];
+				if (!feature) return;
+				const coords = feature.geometry.coordinates;
+				map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 14), duration: 600 });
+			});
+			map.on('mouseenter', 'hotspot-circles', () => { map.getCanvas().style.cursor = 'pointer'; });
+			map.on('mouseleave', 'hotspot-circles', () => { map.getCanvas().style.cursor = ''; });
 
 			map.addSource('user-location', {
 				type: 'geojson',
@@ -300,6 +368,13 @@ export default function MapView() {
 		source.setData(data);
 	}, [isMapLoaded, userLocation]);
 
+	useEffect(() => {
+		if (!isMapLoaded) return;
+		const source = mapRef.current?.getSource(HOTSPOT_SOURCE_ID);
+		if (!source) return;
+		source.setData(showHotspots ? hotspots : { type: 'FeatureCollection', features: [] });
+	}, [isMapLoaded, hotspots, showHotspots]);
+
 	const legendItems = colorMode === 'status'
 		? Object.entries(STATUS_COLORS).map(([name, color]) => ({ name, color }))
 		: categories.map((category) => ({ name: category.name, color: CATEGORY_COLORS[category.id] }));
@@ -327,7 +402,18 @@ export default function MapView() {
 						<option value="Resolved">Resolved</option>
 					</select>
 				</label>
-				<fieldset className={styles.colorControl}>
+				<label className={`${styles.filterControl} ${styles.hotspotToggle}`}>
+				<span>Hotspots</span>
+				<button
+					type="button"
+					className={styles.toggleButton}
+					aria-pressed={showHotspots}
+					onClick={() => setShowHotspots((prev) => !prev)}
+				>
+					{showHotspots ? 'On' : 'Off'}
+				</button>
+			</label>
+			<fieldset className={styles.colorControl}>
 					<legend>Color pins by</legend>
 					<div className={styles.segmentedControl} role="group" aria-label="Color pins by">
 						<button type="button" aria-pressed={colorMode === 'category'} onClick={() => setColorMode('category')}>Category</button>

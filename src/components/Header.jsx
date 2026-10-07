@@ -1,10 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router';
 import { Show, useAuth, UserButton } from '@clerk/react';
+import { useAppRole } from '../auth/roles';
 import styles from './Header.module.css';
+
+const ROLE_LABELS = { user: 'User', authority: 'Enforcer', admin: 'Admin' };
 
 export default function Header() {
 	const { isLoaded, isSignedIn } = useAuth();
+	const { isLoaded: roleLoaded, role } = useAppRole();
 	const authContainerRef = useRef(null);
 
 	useEffect(() => {
@@ -47,6 +51,11 @@ export default function Header() {
 				<Show when="signed-out">
 					<Link to="/sign-in" className="auth-link">Sign in</Link>
 				</Show>
+				{isLoaded && isSignedIn && roleLoaded && (
+					<span className={`${styles.roleBadge} ${styles[`role-${role}`]}`}>
+						{ROLE_LABELS[role] || 'User'}
+					</span>
+				)}
 				<Show when="signed-in">
 					<UserButton />
 				</Show>

@@ -91,9 +91,32 @@
 	color: white;
 }
 
+.hotspotToggle {
+	min-width: 120px;
+	flex: 0 0 120px;
+}
+
+.toggleButton {
+	min-height: 42px;
+	width: 100%;
+	padding: 8px 16px;
+	border: 2px solid var(--border);
+	background: var(--surface);
+	color: var(--text);
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.toggleButton[aria-pressed='true'] {
+	background: #e74c3c;
+	color: white;
+	border-color: #e74c3c;
+}
+
 .segmentedControl button:focus-visible,
 .filterControl select:focus-visible,
-.closePreview:focus-visible {
+.closePreview:focus-visible,
+.toggleButton:focus-visible {
 	outline: 3px solid var(--primary);
 	outline-offset: 2px;
 }

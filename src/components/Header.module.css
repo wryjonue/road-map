@@ -35,7 +35,38 @@
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
+	gap: 10px;
 	min-width: 120px;
+}
+
+.roleBadge {
+	display: inline-flex;
+	align-items: center;
+	padding: 4px 10px;
+	font-size: 0.75rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	border-radius: 3px;
+	white-space: nowrap;
+}
+
+.role-user {
+	background: #e8f4fd;
+	color: #1a6fb5;
+	border: 1px solid #b6d9f2;
+}
+
+.role-authority {
+	background: #fef3e2;
+	color: #b57a1a;
+	border: 1px solid #f2d9a6;
+}
+
+.role-admin {
+	background: #fde8e8;
+	color: #b51a1a;
+	border: 1px solid #f2a6a6;
 }
 
 @media (max-width: 720px) {
@@ -62,7 +93,13 @@
 		min-width: 0;
 		flex: 0 0 auto;
 		justify-content: flex-end;
+		gap: 8px;
 		white-space: nowrap;
+	}
+
+	.roleBadge {
+		padding: 3px 8px;
+		font-size: 0.68rem;
 	}
 
 	.logoMark {
