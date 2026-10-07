@@ -8,12 +8,12 @@ export async function getDashboardMetrics(env) {
 		GROUP BY c.id, c.name
 		ORDER BY c.id
 	`).all();
-	const { results: monthlyResults } = await env.road_map_db.prepare(`
-		SELECT strftime('%Y-%m', created_at) AS report_month, COUNT(*) AS report_count
+	const { results: dailyResults } = await env.road_map_db.prepare(`
+		SELECT strftime('%Y-%m-%d', created_at) AS report_day, COUNT(*) AS report_count
 		FROM reports
 		WHERE deleted_at IS NULL AND status IN ('Open', 'Resolved')
-		GROUP BY report_month
-		ORDER BY report_month
+		GROUP BY report_day
+		ORDER BY report_day
 	`).all();
 	const categories = results.map((row) => ({
 		id: row.category_id,
@@ -23,17 +23,19 @@ export async function getDashboardMetrics(env) {
 	const total = categories.reduce((sum, category) => sum + category.count, 0);
 	const resolved = results.reduce((sum, row) => sum + (Number(row.resolved_count) || 0), 0);
 	const resolvedPercentage = total ? Math.round((resolved / total) * 1000) / 10 : 0;
-	const monthlyReports = monthlyResults.map((row) => ({ month: row.report_month, count: Number(row.report_count) || 0 }));
-	return Response.json({ total, resolved, resolvedPercentage, categories, monthlyReports }, { headers: { 'Cache-Control': 'no-store' } });
+	const dailyReports = dailyResults.map((row) => ({ day: row.report_day, count: Number(row.report_count) || 0 }));
+	return Response.json({ total, resolved, resolvedPercentage, categories, dailyReports }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function getMonthlyReport(env, month) {
 	if (!/^\d{4}-\d{2}$/.test(month)) return Response.json({ error: 'Month must be in YYYY-MM format' }, { status: 400 });
-	const start = `${month}-01T00:00:00Z`;
+	// created_at is stored as local time strings (e.g. '2026-05-18 08:30:00') without timezone.
+	// Compare using simple string prefixes that match the stored format.
 	const [year, mon] = month.split('-').map(Number);
 	const nextMonth = mon === 12 ? 1 : mon + 1;
 	const nextYear = mon === 12 ? year + 1 : year;
-	const end = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00Z`;
+	const start = `${month}-01`;
+	const end = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
 	const { results: summaryRows } = await env.road_map_db.prepare(`
 		SELECT COUNT(*) AS total,
 			COALESCE(SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END), 0) AS resolved,

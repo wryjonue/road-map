@@ -33,8 +33,8 @@ function reportRow({ id, status, authorId = 'reporter-1', authorName = null, aut
 		static_map_r2_key: mapKey,
 		image_key: imageKey,
 		category_id: 1,
-		category_name: 'Road Hazard',
-		category_slug: 'road-hazard',
+		category_name: 'Road Construction',
+		category_slug: 'road-construction',
 	};
 }
 

@@ -74,13 +74,14 @@ export default function Dashboard() {
 
 	useEffect(() => {
 		if (!monthlyChartCanvas.current || !metrics) return undefined;
+		const dailyReports = metrics.dailyReports ?? [];
 		const chart = new Chart(monthlyChartCanvas.current, {
 			type: 'line',
 			data: {
-				labels: metrics.monthlyReports.map((report) => new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${report.month}-01T00:00:00Z`))),
+				labels: dailyReports.map((report) => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${report.day}T00:00:00Z`))),
 				datasets: [{
 					label: 'Open and resolved reports',
-					data: metrics.monthlyReports.map((report) => report.count),
+					data: dailyReports.map((report) => report.count),
 					borderColor: '#3b7587',
 					backgroundColor: 'rgba(59, 117, 135, .14)',
 					pointBackgroundColor: '#3b7587',
@@ -123,12 +124,12 @@ export default function Dashboard() {
 				{stats.map((stat) => <div key={stat.label} className={styles.statCard}><span>{stat.label}</span><strong>{stat.value}</strong></div>)}
 				{isLoading && <p className={styles.state} role="status">Loading report metrics...</p>}
 			</div>
-			<section className={styles.chartSection} aria-labelledby="monthly-chart-heading">
+			<section className={styles.chartSection} aria-labelledby="daily-chart-heading">
 				<div className={styles.chartHeading}>
-					<div><h2 id="monthly-chart-heading">Reports per month</h2></div>
+					<div><h2 id="daily-chart-heading">Reports per day</h2></div>
 				</div>
-				{metrics && <div className={styles.chartFrame}><canvas ref={monthlyChartCanvas} role="img" aria-label="Line chart of open and resolved reports per month" /></div>}
-				{!isLoading && !error && metrics?.monthlyReports.length === 0 && <p className={styles.emptyState}>No open or resolved reports to display yet.</p>}
+				{metrics && <div className={styles.chartFrame}><canvas ref={monthlyChartCanvas} role="img" aria-label="Line chart of open and resolved reports per day" /></div>}
+				{!isLoading && !error && (metrics?.dailyReports?.length ?? 0) === 0 && <p className={styles.emptyState}>No open or resolved reports to display yet.</p>}
 			</section>
 			<section className={styles.chartSection} aria-labelledby="category-chart-heading">
 				<div className={styles.chartHeading}>
