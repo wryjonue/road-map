@@ -150,14 +150,19 @@ export async function getHotspots(env, url) {
 	const rawMinPts = Number(url.searchParams.get('minPts') ?? 3);
 	const minPts = Number.isInteger(rawMinPts) && rawMinPts > 0 ? Math.min(rawMinPts, 50) : 3;
 
-	const since = new Date(Date.now() - days * 86400000).toISOString();
+	const sinceDate = new Date(Date.now() - days * 86400000);
+	const since = `${sinceDate.getFullYear()}-${String(sinceDate.getMonth() + 1).padStart(2, '0')}-${String(sinceDate.getDate()).padStart(2, '0')}`;
 
 	let bboxClause = '';
 	const bboxValues = [];
-	const swLng = Number(url.searchParams.get('sw_lng'));
-	const swLat = Number(url.searchParams.get('sw_lat'));
-	const neLng = Number(url.searchParams.get('ne_lng'));
-	const neLat = Number(url.searchParams.get('ne_lat'));
+	const rawSwLng = url.searchParams.get('sw_lng');
+	const rawSwLat = url.searchParams.get('sw_lat');
+	const rawNeLng = url.searchParams.get('ne_lng');
+	const rawNeLat = url.searchParams.get('ne_lat');
+	const swLng = rawSwLng !== null ? Number(rawSwLng) : NaN;
+	const swLat = rawSwLat !== null ? Number(rawSwLat) : NaN;
+	const neLng = rawNeLng !== null ? Number(rawNeLng) : NaN;
+	const neLat = rawNeLat !== null ? Number(rawNeLat) : NaN;
 	if ([swLng, swLat, neLng, neLat].every(Number.isFinite)) {
 		bboxClause = ' AND r.longitude >= ? AND r.longitude <= ? AND r.latitude >= ? AND r.latitude <= ?';
 		bboxValues.push(swLng, neLng, swLat, neLat);

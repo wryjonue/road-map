@@ -106,6 +106,7 @@ export function computeHotspots(reports, eps, minPts) {
 			geometry: { type: 'Point', coordinates: [centroidLng, centroidLat] },
 			properties: {
 				count,
+				centroidLat,
 				statusCounts,
 				categoryCounts,
 				reportIds,

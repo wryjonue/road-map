@@ -215,7 +215,19 @@ export default function MapView() {
 				paint: {
 					'circle-color': '#e74c3c',
 					'circle-opacity': 0.35,
-					'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 3, 18, 10, 36, 30, 60],
+					// Radius scales exponentially with zoom to cover ~300m on the ground.
+					// Base 2 interpolation matches the Web Mercator 2^zoom scaling.
+					// Stops calculated as: (300m * 2^zoom) / (156543 * cos(14.5deg))
+					'circle-radius': [
+						'interpolate',
+						['exponential', 2],
+						['zoom'],
+						10, 4,
+						12, 8,
+						14, 32,
+						16, 130,
+						18, 520,
+					],
 					'circle-stroke-color': '#e74c3c',
 					'circle-stroke-width': 1.5,
 					'circle-stroke-opacity': 0.6,
