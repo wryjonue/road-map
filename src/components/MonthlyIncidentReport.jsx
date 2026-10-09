@@ -67,14 +67,15 @@ export default function MonthlyIncidentReport() {
 	useEffect(() => {
 		if (!chartCanvas.current || !data) return undefined;
 		chartInstance.current?.destroy();
+		const municipalities = Array.isArray(data.byMunicipality) ? data.byMunicipality : [];
 		chartInstance.current = new Chart(chartCanvas.current, {
 			type: 'bar',
 			data: {
-				labels: data.byArea.map((item) => item.area),
+				labels: municipalities.map((item) => item.municipality),
 				datasets: [{
 					label: 'Incidents',
-					data: data.byArea.map((item) => item.count),
-					backgroundColor: AREA_COLORS.slice(0, data.byArea.length),
+					data: municipalities.map((item) => item.count),
+					backgroundColor: AREA_COLORS.slice(0, municipalities.length),
 					borderWidth: 0,
 					barThickness: 22,
 				}],
@@ -133,9 +134,9 @@ export default function MonthlyIncidentReport() {
 						</div>
 					</div>
 
-					{data.byArea.length > 0 ? (
+					{(data.byMunicipality ?? []).length > 0 ? (
 						<div className={styles.chartFrame}>
-							<canvas ref={chartCanvas} role="img" aria-label={`Horizontal bar chart of incidents by area for ${formatMonthLabel(selectedMonth)}`} />
+							<canvas ref={chartCanvas} role="img" aria-label={`Horizontal bar chart of incidents by municipality for ${formatMonthLabel(selectedMonth)}`} />
 						</div>
 					) : (
 						<p className={styles.emptyState}>No incidents recorded for {formatMonthLabel(selectedMonth)}.</p>

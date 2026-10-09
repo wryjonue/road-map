@@ -1,5 +1,6 @@
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
 import { computeHotspots } from './clustering.js';
+import { calculateRoute } from './routing-service.js';
 
 const MAX_PAGE_SIZE = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -10,7 +11,8 @@ const MAP_REPORT_STATUSES = new Set(['Open', 'Resolved']);
 const REPORT_SELECT = `
 	SELECT r.id, r.title, r.description, r.author_id, r.author_name, r.author_image_url, r.status,
 		r.image_url, r.static_map_url, r.barangay, r.city, r.province, r.resolved_address,
-		r.longitude, r.latitude, r.vote_count, r.comment_count, r.created_at, r.updated_at,
+		r.longitude, r.latitude, r.start_longitude, r.start_latitude, r.dest_longitude, r.dest_latitude,
+		r.route_polyline, r.vote_count, r.comment_count, r.created_at, r.updated_at,
 		r.static_map_r2_key, c.id AS category_id, c.name AS category_name, c.slug AS category_slug
 	FROM reports r JOIN categories c ON c.id = r.category_id
 `;
@@ -46,6 +48,9 @@ function toReport(row, images = []) {
 		images: images.filter((image) => image.r2_key).map((image) => ({ id: image.id, url: mediaUrl(image.r2_key), fileName: image.file_name, contentType: image.content_type })),
 		staticMapUrl: row.static_map_r2_key ? mediaUrl(row.static_map_r2_key) : row.static_map_url,
 		location: { barangay: row.barangay, city: row.city, province: row.province, resolvedAddress: row.resolved_address, longitude: row.longitude, latitude: row.latitude },
+		startLocation: row.start_longitude != null && row.start_latitude != null ? { longitude: row.start_longitude, latitude: row.start_latitude } : null,
+		destLocation: row.dest_longitude != null && row.dest_latitude != null ? { longitude: row.dest_longitude, latitude: row.dest_latitude } : null,
+		routePolyline: row.route_polyline || null,
 		barangay: row.barangay, city: row.city, province: row.province, resolvedAddress: row.resolved_address,
 		longitude: row.longitude, latitude: row.latitude, voteCount: row.vote_count, commentCount: row.comment_count,
 		createdAt: row.created_at, updatedAt: row.updated_at,
@@ -112,7 +117,8 @@ export async function getMapReports(env, url) {
 	const mapQuery = `
 		SELECT r.id, r.title, r.description, r.author_id, r.author_name, r.author_image_url,
 			r.status, r.barangay, r.city, r.province, r.resolved_address,
-			r.longitude, r.latitude, r.created_at,
+			r.longitude, r.latitude, r.start_longitude, r.start_latitude, r.dest_longitude, r.dest_latitude,
+			r.route_polyline, r.created_at,
 			c.id AS category_id, c.name AS category_name, c.slug AS category_slug
 		FROM reports r JOIN categories c ON c.id = r.category_id
 		WHERE r.deleted_at IS NULL AND r.status IN ('Open', 'Resolved')${filters}
@@ -133,6 +139,9 @@ export async function getMapReports(env, url) {
 		status: row.status,
 		category: { id: row.category_id, name: row.category_name, slug: row.category_slug },
 		location: { barangay: row.barangay, city: row.city, province: row.province, resolvedAddress: row.resolved_address, longitude: row.longitude, latitude: row.latitude },
+		startLocation: row.start_longitude != null && row.start_latitude != null ? { longitude: row.start_longitude, latitude: row.start_latitude } : null,
+		destLocation: row.dest_longitude != null && row.dest_latitude != null ? { longitude: row.dest_longitude, latitude: row.dest_latitude } : null,
+		routePolyline: row.route_polyline || null,
 		longitude: row.longitude,
 		latitude: row.latitude,
 		createdAt: row.created_at,
@@ -302,20 +311,44 @@ async function parseBody(request) {
 			resolvedAddress: formValue(form, 'resolvedAddress'),
 			longitude: formValue(form, 'longitude'),
 			latitude: formValue(form, 'latitude'),
+			startLongitude: formValue(form, 'startLongitude'),
+			startLatitude: formValue(form, 'startLatitude'),
+			destLongitude: formValue(form, 'destLongitude'),
+			destLatitude: formValue(form, 'destLatitude'),
 			image: form.get('image'),
 		};
 	}
 	return { ...(await request.json()), image: null };
 }
 function extension(contentType) { return ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' })[contentType] || 'bin'; }
-async function createStaticMap(env, reportId, longitude, latitude) {
+async function createStaticMap(env, reportId, longitude, latitude, routeGeometry, startLng, startLat, destLng, destLat) {
 	if (!env.GEOAPIFY_API_KEY) throw new Error('GEOAPIFY_API_KEY is not configured');
-	const params = new URLSearchParams({ style: 'osm-bright-smooth', width: '1000', height: '600', center: `lonlat:${longitude},${latitude}`, zoom: '12', marker: `lonlat:${longitude},${latitude}`, apiKey: env.GEOAPIFY_API_KEY });
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), GEOAPIFY_TIMEOUT);
+	let url;
+	// Note: Geoapify's static map polyline/geojson params have been unreliable for short routes.
+	// For now, render only the start/destination markers with fit=auto. The full route line is
+	// visible on the interactive maps (CreateReport preview, MapView, ViewReport page).
+	if (routeGeometry && Array.isArray(routeGeometry.coordinates) && routeGeometry.coordinates.length > 0) {
+		const startMarker = `lonlat:${Number(startLng).toFixed(6)},${Number(startLat).toFixed(6)};color:%232d7a5d;size:32`;
+		const destMarker = `lonlat:${Number(destLng).toFixed(6)},${Number(destLat).toFixed(6)};color:%23bd3e50;size:32`;
+		const markerParam = `${startMarker}|${destMarker}`;
+		url = `https://maps.geoapify.com/v1/staticmap?style=osm-bright-smooth&width=1000&height=600`
+			+ `&marker=${markerParam}`
+			+ `&fit=auto&apiKey=${encodeURIComponent(env.GEOAPIFY_API_KEY)}`;
+		console.log('[static-map] markers-only url length=', url.length);
+	} else {
+		const params = new URLSearchParams({ style: 'osm-bright-smooth', width: '1000', height: '600', center: `lonlat:${longitude},${latitude}`, zoom: '12', marker: `lonlat:${longitude},${latitude}`, apiKey: env.GEOAPIFY_API_KEY });
+		url = `https://maps.geoapify.com/v1/staticmap?${params}`;
+	}
 	let response;
-	try { response = await fetch(`https://maps.geoapify.com/v1/staticmap?${params}`, { signal: controller.signal }); } finally { clearTimeout(timeout); }
-	if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) throw new Error('Geoapify static map generation failed');
+	try { response = await fetch(url, { signal: controller.signal }); } finally { clearTimeout(timeout); }
+	if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) {
+		let detail = '';
+		try { detail = (await response.clone().text()).slice(0, 200); } catch {}
+		console.error('[static-map] failed status=', response.status, 'detail=', detail);
+		throw new Error('Geoapify static map generation failed');
+	}
 	const key = `reports/${reportId}/static-map.png`; await env.ROAD_MAP_MEDIA.put(key, await response.arrayBuffer(), { httpMetadata: { contentType: response.headers.get('content-type') } }); return key;
 }
 export async function createReport(request, env, auth) {
@@ -323,11 +356,32 @@ export async function createReport(request, env, auth) {
 	if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_SIZE) return errorResponse('Request is too large');
 	let body; try { body = await parseBody(request); } catch { return errorResponse('Request body must be valid JSON or multipart form data'); }
 	const title = typeof body.title === 'string' ? body.title.trim() : ''; const description = typeof body.description === 'string' ? body.description.trim() : ''; const longitude = Number(body.longitude); const latitude = Number(body.latitude); const categoryId = Number(body.categoryId);
+	const startLongitude = body.startLongitude != null ? Number(body.startLongitude) : null;
+	const startLatitude = body.startLatitude != null ? Number(body.startLatitude) : null;
+	const destLongitude = body.destLongitude != null ? Number(body.destLongitude) : null;
+	const destLatitude = body.destLatitude != null ? Number(body.destLatitude) : null;
 	if (!title) return errorResponse('title is required'); if (!description) return errorResponse('description is required'); if (title.length > 160) return errorResponse('title must be 160 characters or fewer'); if (description.length > 5000) return errorResponse('description must be 5000 characters or fewer'); if (!Number.isInteger(categoryId) || categoryId < 1) return errorResponse('categoryId must be a positive integer');
 	let resolvedLocation;
 	try { resolvedLocation = await resolveRoadLocation(latitude, longitude, env, request.signal); } catch (error) {
 		if (error instanceof LocationResolutionError) return errorResponse(error.message, error.status);
 		throw error;
+	}
+	let resolvedStart = null;
+	let resolvedDest = null;
+	let routePolyline = null;
+	if (Number.isFinite(startLongitude) && Number.isFinite(startLatitude) && Number.isFinite(destLongitude) && Number.isFinite(destLatitude)) {
+		try {
+			resolvedStart = await resolveRoadLocation(startLatitude, startLongitude, env, request.signal);
+			resolvedDest = await resolveRoadLocation(destLatitude, destLongitude, env, request.signal);
+		} catch (error) {
+			if (error instanceof LocationResolutionError) return errorResponse(`Route point: ${error.message}`, error.status);
+			throw error;
+		}
+		try {
+			routePolyline = JSON.stringify(await calculateRoute(resolvedStart.latitude, resolvedStart.longitude, resolvedDest.latitude, resolvedDest.longitude, request.signal, env));
+		} catch (error) {
+			return errorResponse(error.message || 'Unable to calculate route between points', 502);
+		}
 	}
 	const category = await env.road_map_db.prepare('SELECT id FROM categories WHERE id = ?').bind(categoryId).first(); if (!category) return errorResponse('categoryId does not reference an existing category');
 	const image = body.image;
@@ -337,10 +391,11 @@ export async function createReport(request, env, auth) {
 	try {
 		const authorName = getAuthorName(body, auth);
 		const authorImageUrl = getAuthorImageUrl(body, auth);
-		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, author_name, author_image_url, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, authorName, authorImageUrl, categoryId, 'Pending', resolvedLocation.barangay || null, resolvedLocation.city || null, resolvedLocation.province, resolvedLocation.address, resolvedLocation.longitude, resolvedLocation.latitude).run();
+		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, author_name, author_image_url, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude, start_longitude, start_latitude, dest_longitude, dest_latitude, route_polyline) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, authorName, authorImageUrl, categoryId, 'Pending', resolvedLocation.barangay || null, resolvedLocation.city || null, resolvedLocation.province, resolvedLocation.address, resolvedLocation.longitude, resolvedLocation.latitude, resolvedStart?.longitude ?? null, resolvedStart?.latitude ?? null, resolvedDest?.longitude ?? null, resolvedDest?.latitude ?? null, routePolyline).run();
 		reportId = result.meta.last_row_id;
 		if (image) { imageKey = `reports/${reportId}/images/${crypto.randomUUID()}.${extension(image.type)}`; await env.ROAD_MAP_MEDIA.put(imageKey, image.stream(), { httpMetadata: { contentType: image.type }, customMetadata: { fileName: image.name || 'upload' } }); await env.road_map_db.prepare('INSERT INTO report_images (report_id, image_url, r2_key, content_type, file_name, file_size) VALUES (?, ?, ?, ?, ?, ?)').bind(reportId, imageKey, imageKey, image.type, image.name || null, image.size).run(); }
-		staticMapKey = await createStaticMap(env, reportId, longitude, latitude); await env.road_map_db.prepare('UPDATE reports SET static_map_r2_key = ?, static_map_url = ? WHERE id = ?').bind(staticMapKey, mediaUrl(staticMapKey), reportId).run();
+		const parsedRoute = routePolyline ? JSON.parse(routePolyline) : null;
+		staticMapKey = await createStaticMap(env, reportId, longitude, latitude, parsedRoute, resolvedStart?.longitude ?? longitude, resolvedStart?.latitude ?? latitude, resolvedDest?.longitude ?? longitude, resolvedDest?.latitude ?? latitude); await env.road_map_db.prepare('UPDATE reports SET static_map_r2_key = ?, static_map_url = ? WHERE id = ?').bind(staticMapKey, mediaUrl(staticMapKey), reportId).run();
 		return getReport(env, reportId, 201, auth);
 	} catch (error) {
 		if (imageKey) await env.ROAD_MAP_MEDIA.delete(imageKey).catch(() => {}); if (staticMapKey) await env.ROAD_MAP_MEDIA.delete(staticMapKey).catch(() => {}); if (reportId) await env.road_map_db.prepare('DELETE FROM reports WHERE id = ?').bind(reportId).run().catch(() => {}); throw error;

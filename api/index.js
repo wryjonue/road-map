@@ -1,6 +1,6 @@
 import { approveReport, createReport, deletePendingReport, getHotspots, getMapReports, getMedia, getReport, getVoteStatus, listReports, rejectReport, resolveReport, voteReport } from './report-service.js';
 import { getDashboardMetrics, getMonthlyReport } from './dashboard-service.js';
-import { getSampleRoute } from './routing-service.js';
+import { getCalculatedRoute, getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
 
@@ -20,6 +20,12 @@ export default {
 			if (url.pathname === '/api/routes/sample') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
 				return getSampleRoute(request, env);
+			}
+			if (url.pathname === '/api/routes/calculate') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await getOptionalUser(request, env);
+				if (auth instanceof Response) return auth;
+				return getCalculatedRoute(request, env);
 			}
 			if (url.pathname === '/api/dashboard/metrics') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });

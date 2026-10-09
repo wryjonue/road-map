@@ -45,11 +45,11 @@ export async function getMonthlyReport(env, month) {
 	`).bind(start, end).all();
 	const summary = summaryRows[0] || { total: 0, resolved: 0, unresolved: 0 };
 	const { results: locationRows } = await env.road_map_db.prepare(`
-		SELECT COALESCE(NULLIF(barangay, ''), NULLIF(city, ''), NULLIF(province, ''), 'Unknown location') AS area,
+		SELECT COALESCE(NULLIF(city, ''), 'Unknown municipality') AS municipality,
 			COUNT(*) AS count
 		FROM reports
 		WHERE deleted_at IS NULL AND created_at >= ? AND created_at < ?
-		GROUP BY area
+		GROUP BY municipality
 		ORDER BY count DESC
 	`).bind(start, end).all();
 	return Response.json({
@@ -57,6 +57,6 @@ export async function getMonthlyReport(env, month) {
 		total: Number(summary.total) || 0,
 		resolved: Number(summary.resolved) || 0,
 		unresolved: Number(summary.unresolved) || 0,
-		byArea: locationRows.map((row) => ({ area: row.area, count: Number(row.count) || 0 })),
+		byMunicipality: locationRows.map((row) => ({ municipality: row.municipality, count: Number(row.count) || 0 })),
 	}, { headers: { 'Cache-Control': 'no-store' } });
 }

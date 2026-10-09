@@ -26,18 +26,44 @@ const STATUS_COLORS = { Open: '#2d7a5d', Resolved: '#626b73' };
 function createFeatureCollection(reports, colorMode) {
 	return {
 		type: 'FeatureCollection',
-		features: reports.map((report) => ({
-			type: 'Feature',
-			properties: {
-				reportId: report.id,
-				categoryId: report.category.id,
-				pinColor: colorMode === 'status' ? STATUS_COLORS[report.status] : CATEGORY_COLORS[report.category.id],
-			},
-			geometry: {
-				type: 'Point',
-				coordinates: [report.location.longitude, report.location.latitude],
-			},
-		})),
+		// Omit reports that have a route polyline — they render as lines instead of dots.
+		features: reports
+			.filter((report) => !report.routePolyline)
+			.map((report) => ({
+				type: 'Feature',
+				properties: {
+					reportId: report.id,
+					categoryId: report.category.id,
+					pinColor: colorMode === 'status' ? STATUS_COLORS[report.status] : CATEGORY_COLORS[report.category.id],
+				},
+				geometry: {
+					type: 'Point',
+					coordinates: [report.location.longitude, report.location.latitude],
+				},
+			})),
+	};
+}
+
+function createRouteFeatureCollection(reports, colorMode) {
+	return {
+		type: 'FeatureCollection',
+		features: reports
+			.filter((report) => report.routePolyline)
+			.map((report) => {
+				try {
+					const lineColor = colorMode === 'status'
+						? (STATUS_COLORS[report.status] || '#0066ff')
+						: (CATEGORY_COLORS[report.category?.id] || '#0066ff');
+					return {
+						type: 'Feature',
+						properties: { reportId: report.id, categoryId: report.category?.id, status: report.status, lineColor },
+						geometry: JSON.parse(report.routePolyline),
+					};
+				} catch {
+					return null;
+				}
+			})
+			.filter(Boolean),
 	};
 }
 
@@ -148,6 +174,20 @@ export default function MapView() {
 		mapRef.current = map;
 
 		map.once('load', () => {
+			map.addSource('route-lines', {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: [] },
+			});
+			map.addLayer({
+				id: 'route-paths',
+				type: 'line',
+				source: 'route-lines',
+				paint: {
+					'line-color': ['get', 'lineColor'],
+					'line-width': 6,
+					'line-opacity': 0.85,
+				},
+			});
 			map.addSource(SOURCE_ID, {
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: [] },
@@ -304,7 +344,11 @@ export default function MapView() {
 				const reportId = Number(event.features?.[0]?.properties?.reportId);
 				if (Number.isSafeInteger(reportId)) setSelectedReportId(reportId);
 			});
-			for (const layer of ['report-clusters', 'report-points']) {
+			map.on('click', 'route-paths', (event) => {
+				const reportId = Number(event.features?.[0]?.properties?.reportId);
+				if (Number.isSafeInteger(reportId)) setSelectedReportId(reportId);
+			});
+			for (const layer of ['report-clusters', 'report-points', 'route-paths']) {
 				map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
 				map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
 			}
@@ -326,6 +370,13 @@ export default function MapView() {
 			setError('Unable to render report locations.');
 		});
 	}, [colorMode, isMapLoaded, reports]);
+
+	useEffect(() => {
+		if (!isMapLoaded) return;
+		const source = mapRef.current?.getSource('route-lines');
+		if (!source) return;
+		source.setData(createRouteFeatureCollection(reports, colorMode));
+	}, [isMapLoaded, reports, colorMode]);
 
 	useEffect(() => {
 		if (!isMapLoaded) return;

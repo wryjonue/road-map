@@ -97,19 +97,54 @@ export default function ViewReportPage() {
 	useEffect(() => {
 		if (!mapContainer.current || !report) return undefined;
 		maplibregl.setWorkerUrl(maplibreWorkerUrl);
-		const center = [report.location.longitude, report.location.latitude];
+		const hasRoute = Boolean(report.routePolyline);
+		const center = hasRoute && report.startLocation
+			? [report.startLocation.longitude, report.startLocation.latitude]
+			: [report.location.longitude, report.location.latitude];
 		const map = new maplibregl.Map({
 			container: mapContainer.current,
 			style: 'https://tiles.openfreemap.org/styles/liberty',
 			customAttribution: '<a href="https://openfreemap.org/">OpenFreeMap</a> | <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>',
 			center,
-			zoom: 15,
+			zoom: hasRoute ? 12 : 15,
 		});
 		mapRef.current = map;
 
-		new maplibregl.Marker({ color: '#c65d2e' }).setLngLat(center).addTo(map);
-
 		map.once('load', () => {
+			if (hasRoute && report.routePolyline) {
+				try {
+					const geometry = JSON.parse(report.routePolyline);
+					map.addSource('route-line', { type: 'geojson', data: geometry });
+					map.addLayer({
+						id: 'route-path',
+						type: 'line',
+						source: 'route-line',
+						paint: { 'line-color': '#0066ff', 'line-width': 4, 'line-opacity': 0.85 },
+					});
+					if (Array.isArray(geometry.coordinates) && geometry.coordinates.length > 0) {
+						const bounds = new maplibregl.LngLatBounds();
+						geometry.coordinates.forEach((coord) => bounds.extend(coord));
+						map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+					}
+				} catch {
+					// Invalid polyline JSON; fall back to point marker below
+				}
+			}
+			if (report.startLocation) {
+				new maplibregl.Marker({ color: '#2d7a5d' })
+					.setLngLat([report.startLocation.longitude, report.startLocation.latitude])
+					.setPopup(new maplibregl.Popup({ offset: 25 }).setText('Start'))
+					.addTo(map);
+			}
+			if (report.destLocation) {
+				new maplibregl.Marker({ color: '#bd3e50' })
+					.setLngLat([report.destLocation.longitude, report.destLocation.latitude])
+					.setPopup(new maplibregl.Popup({ offset: 25 }).setText('Destination'))
+					.addTo(map);
+			}
+			if (!hasRoute) {
+				new maplibregl.Marker({ color: '#c65d2e' }).setLngLat(center).addTo(map);
+			}
 			if (userLocationRef.current) {
 				new maplibregl.Marker({ color: '#3b82f6' }).setLngLat(userLocationRef.current).addTo(map);
 			}

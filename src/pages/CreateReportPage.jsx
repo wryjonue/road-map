@@ -24,12 +24,15 @@ export default function CreateReportPage() {
 	const navigate = useNavigate();
 	const mapContainer = useRef(null);
 	const mapRef = useRef(null);
-	const markerRef = useRef(null);
+	const startMarkerRef = useRef(null);
+	const destMarkerRef = useRef(null);
+	const routeLineRef = useRef(null);
 	const requestController = useRef(null);
 	const { getToken } = useAuth();
 	const { user } = useUser();
 	const [form, setForm] = useState({ title: '', description: '', categoryId: categories[0].id });
-	const [location, setLocation] = useState(initialLocation);
+	const [startLocation, setStartLocation] = useState(initialLocation);
+	const [destLocation, setDestLocation] = useState(initialLocation);
 	const [locationError, setLocationError] = useState('');
 	const [isResolving, setIsResolving] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,14 +53,17 @@ export default function CreateReportPage() {
 			zoom: 12,
 		});
 		mapRef.current = map;
-		const marker = new maplibregl.Marker({ draggable: true }).setLngLat(BATAAN_CENTER).addTo(map);
-		markerRef.current = marker;
 
-		const resolveLocation = async () => {
+		const startMarker = new maplibregl.Marker({ draggable: true, color: '#2d7a5d' }).setLngLat(BATAAN_CENTER).addTo(map);
+		startMarkerRef.current = startMarker;
+		const destMarker = new maplibregl.Marker({ draggable: true, color: '#bd3e50' }).setLngLat(BATAAN_CENTER).addTo(map);
+		destMarkerRef.current = destMarker;
+
+		const resolveMarkerLocation = async (marker, setter) => {
 			const { lat, lng } = marker.getLngLat();
 			setIsResolving(true);
 			setLocationError('');
-			setLocation(initialLocation);
+			setter(initialLocation);
 			requestController.current?.abort();
 			const controller = new AbortController();
 			requestController.current = controller;
@@ -71,7 +77,7 @@ export default function CreateReportPage() {
 				const result = await readApiResponse(response, 'Unable to resolve this location');
 				if (controller.signal.aborted || requestController.current !== controller) return;
 				marker.setLngLat([result.longitude, result.latitude]);
-				setLocation({ barangay: result.barangay, city: result.city, province: result.province, address: result.address, roadName: result.roadName, snapDistance: result.snapDistance, coordinates: { lat: result.latitude, lng: result.longitude } });
+				setter({ barangay: result.barangay, city: result.city, province: result.province, address: result.address, roadName: result.roadName, snapDistance: result.snapDistance, coordinates: { lat: result.latitude, lng: result.longitude } });
 			} catch (error) {
 				if (error.name !== 'AbortError') setLocationError(error.message || 'We could not resolve this location. Please try dragging the marker again.');
 			} finally {
@@ -79,12 +85,17 @@ export default function CreateReportPage() {
 			}
 		};
 
-		marker.on('dragend', resolveLocation);
+		startMarker.on('dragend', () => resolveMarkerLocation(startMarker, setStartLocation));
+		destMarker.on('dragend', () => resolveMarkerLocation(destMarker, setDestLocation));
+
 		return () => {
 			requestController.current?.abort();
-			markerRef.current = null;
+			startMarkerRef.current = null;
+			destMarkerRef.current = null;
+			routeLineRef.current = null;
 			mapRef.current = null;
-			marker.remove();
+			startMarker.remove();
+			destMarker.remove();
 			map.remove();
 		};
 	}, [getToken]);
@@ -94,17 +105,54 @@ export default function CreateReportPage() {
 		let cancelled = false;
 		navigator.geolocation.getCurrentPosition(
 			(position) => {
-				if (cancelled || !markerRef.current || !mapRef.current) return;
+				if (cancelled || !startMarkerRef.current || !destMarkerRef.current || !mapRef.current) return;
 				const coords = [position.coords.longitude, position.coords.latitude];
-				markerRef.current.setLngLat(coords);
+				startMarkerRef.current.setLngLat(coords);
+				destMarkerRef.current.setLngLat(coords);
 				mapRef.current.flyTo({ center: coords, zoom: 14, duration: 1200 });
-				setLocation((prev) => ({ ...prev, coordinates: { lat: position.coords.latitude, lng: position.coords.longitude } }));
+				const rawCoords = { lat: position.coords.latitude, lng: position.coords.longitude };
+				setStartLocation((prev) => ({ ...prev, coordinates: rawCoords }));
+				setDestLocation((prev) => ({ ...prev, coordinates: rawCoords }));
 			},
 			() => {},
 			{ enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
 		);
 		return () => { cancelled = true; };
 	}, []);
+
+	useEffect(() => {
+		if (!mapRef.current || !startLocation.coordinates || !destLocation.coordinates) return;
+		const map = mapRef.current;
+
+		const fetchRoute = async () => {
+			try {
+				const token = await getToken();
+				const response = await fetch(`/api/routes/calculate?start=${startLocation.coordinates.lat},${startLocation.coordinates.lng}&end=${destLocation.coordinates.lat},${destLocation.coordinates.lng}`, {
+					headers: token ? { Authorization: `Bearer ${token}` } : {},
+				});
+				if (!response.ok) return;
+				const geometry = await response.json();
+				if (routeLineRef.current) {
+					map.getSource('route-preview').setData(geometry);
+				} else {
+					map.addSource('route-preview', { type: 'geojson', data: geometry });
+					map.addLayer({
+						id: 'route-preview-line',
+						type: 'line',
+						source: 'route-preview',
+						paint: { 'line-color': '#0066ff', 'line-width': 6, 'line-opacity': 0.85 },
+					});
+					routeLineRef.current = true;
+				}
+				const bounds = new maplibregl.LngLatBounds();
+				geometry.coordinates.forEach((coord) => bounds.extend(coord));
+				map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+			} catch {
+				// Route preview is optional; fail silently
+			}
+		};
+		void fetchRoute();
+	}, [startLocation.coordinates, destLocation.coordinates, getToken]);
 
 	useEffect(() => () => { if (imagePreview) URL.revokeObjectURL(imagePreview); }, [imagePreview]);
 
@@ -118,8 +166,12 @@ export default function CreateReportPage() {
 	};
 	const handleSubmit = async (event) => {
 		event.preventDefault();
-		if (!location.coordinates || !location.province.toLowerCase().includes('bataan')) {
-			setLocationError('Please pin a location inside the Province of Bataan before submitting.');
+		if (!startLocation.coordinates || !startLocation.province.toLowerCase().includes('bataan')) {
+			setLocationError('Please set a valid start point inside the Province of Bataan before submitting.');
+			return;
+		}
+		if (!destLocation.coordinates || !destLocation.province.toLowerCase().includes('bataan')) {
+			setLocationError('Please set a valid destination inside the Province of Bataan before submitting.');
 			return;
 		}
 		setIsSubmitting(true);
@@ -132,12 +184,16 @@ export default function CreateReportPage() {
 			payload.append('authorId', user?.id || 'mock-user-local');
 			payload.append('authorName', [user?.firstName, user?.lastName].filter(Boolean).join(' '));
 			payload.append('authorImageUrl', user?.imageUrl || '');
-			payload.append('barangay', location.barangay);
-			payload.append('city', location.city);
-			payload.append('province', location.province);
-			payload.append('resolvedAddress', location.address);
-			payload.append('longitude', String(location.coordinates.lng));
-			payload.append('latitude', String(location.coordinates.lat));
+			payload.append('barangay', destLocation.barangay);
+			payload.append('city', destLocation.city);
+			payload.append('province', destLocation.province);
+			payload.append('resolvedAddress', destLocation.address);
+			payload.append('longitude', String(destLocation.coordinates.lng));
+			payload.append('latitude', String(destLocation.coordinates.lat));
+			payload.append('startLongitude', String(startLocation.coordinates.lng));
+			payload.append('startLatitude', String(startLocation.coordinates.lat));
+			payload.append('destLongitude', String(destLocation.coordinates.lng));
+			payload.append('destLatitude', String(destLocation.coordinates.lat));
 			if (image) payload.append('image', image);
 			const response = await fetch('/api/reports', {
 				method: 'POST',
@@ -157,7 +213,7 @@ export default function CreateReportPage() {
 
 	return (
 		<section className={`page-card ${styles.page}`}>
-			<div className={styles.heading}><div><h1>Create Incident Report</h1><p>Pin the incident location and share the details with your road response team.</p></div></div>
+			<div className={styles.heading}><div><h1>Create Incident Report</h1></div></div>
 			<form className={styles.form} onSubmit={handleSubmit}>
 				<div className={styles.fields}>
 					<label className={styles.field}><span>Post Title</span><input type="text" value={form.title} onChange={(event) => updateField('title', event.target.value)} required /></label>
@@ -166,7 +222,22 @@ export default function CreateReportPage() {
 					<label className={`${styles.field} ${styles.fullWidth}`}><span>Image (optional)</span><input type="file" accept="image/*" onChange={handleImageChange} />{imagePreview && <img className={styles.preview} src={imagePreview} alt="Selected incident" />}</label>
 				</div>
 
-				<div className={styles.locationSection}><div className={styles.locationHeading}><div><h2>Incident location</h2><p>Drag the marker to the incident. The address will be resolved automatically.</p></div>{isResolving && <span className={styles.loading}>Resolving address...</span>}</div><div ref={mapContainer} className={styles.map} />{locationError && <div className={styles.warning} role="alert">{locationError}</div>}{location.address && <div className={styles.address}><strong>Resolved address</strong><span>{location.address}</span><small className={styles.snapStatus}>{location.roadName ? `Marker snapped ${Math.round(location.snapDistance)} m to ${location.roadName}` : 'Marker matched to the nearest road'}</small><small>{location.barangay || 'Barangay unavailable'} · {location.city || 'Municipality unavailable'} · {location.province}</small></div>}</div>
+				<div className={styles.locationSection}>
+					<div className={styles.locationHeading}>
+						<div><p>Drag the green and red marker on the map to start and end of the Path.</p></div>
+						{isResolving && <span className={styles.loading}>Fetching address...</span>}
+					</div>
+					<div className={styles.markerLegend}>
+						<span className={styles.legendItem}><span className={styles.dot} style={{ background: '#2d7a5d' }} /> Path Start</span>
+						<span className={styles.legendItem}><span className={styles.dot} style={{ background: '#bd3e50' }} /> Path End</span>
+					</div>
+					<div ref={mapContainer} className={styles.map} />
+					{locationError && <div className={styles.warning} role="alert">{locationError}</div>}
+					<div className={styles.routePoints}>
+						{startLocation.address && <div className={styles.address}><strong>Path Start</strong><span>{startLocation.address}</span><small className={styles.snapStatus}>{startLocation.roadName ? `Snapped ${Math.round(startLocation.snapDistance)} m to ${startLocation.roadName}` : 'Matched to nearest road'}</small></div>}
+						{destLocation.address && <div className={styles.address}><strong>Path End</strong><span>{destLocation.address}</span><small className={styles.snapStatus}>{destLocation.roadName ? `Snapped ${Math.round(destLocation.snapDistance)} m to ${destLocation.roadName}` : 'Matched to nearest road'}</small></div>}
+					</div>
+				</div>
 				<div className={styles.actions}><button type="button" className="ghost-btn danger-btn" onClick={() => navigate('/feed')}>Cancel</button><button type="submit" className="primary-btn" disabled={isSubmitting || isResolving}>{isSubmitting ? 'Submitting...' : 'Submit Report'}</button></div>
 			</form>
 		</section>
