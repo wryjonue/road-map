@@ -1,109 +1,161 @@
 .header {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	justify-content: space-between;
-	gap: 16px;
-	padding: 18px 20px;
+	gap: 24px;
+	padding: 32px 40px 24px;
+	background: transparent;
+}
+
+.leftSection {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.menuButton {
+	display: none;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border: none;
 	background: var(--surface);
-	border: 2px solid var(--border);
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	color: var(--text);
+	box-shadow: var(--shadow-sm);
+	transition: all 0.2s ease;
+}
+
+.menuButton:hover {
+	background: var(--bg-app);
 	box-shadow: var(--shadow);
 }
 
-.logo {
+.menuButton svg {
+	width: 20px;
+	height: 20px;
+}
+
+.breadcrumb {
 	display: flex;
 	align-items: center;
-	gap: 12px;
-	flex-grow: 1;
-	font-weight: 700;
+	gap: 8px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.breadcrumbSeparator {
+	color: var(--border);
+}
+
+.breadcrumbPage {
 	color: var(--text);
 }
 
-.logoMark {
-	width: 36px;
-	height: 36px;
-	border: 2px solid var(--border);
-	border-radius: 3px;
-	display: grid;
-	place-items: center;
-	background: var(--primary);
-	color: white;
-	font-size: 1rem;
+.pageTitle {
+	margin: 0;
+	font-size: 2rem;
+	font-weight: 700;
+	color: var(--text);
+	letter-spacing: -0.02em;
 }
 
-.authContainer {
+.rightSection {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
-	gap: 10px;
-	min-width: 120px;
+	gap: 16px;
+}
+
+.dateDisplay {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.875rem;
+	color: var(--text-muted);
+	font-weight: 500;
+}
+
+.dateIcon {
+	width: 16px;
+	height: 16px;
 }
 
 .roleBadge {
 	display: inline-flex;
 	align-items: center;
-	padding: 4px 10px;
+	padding: 6px 12px;
 	font-size: 0.75rem;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	border-radius: 3px;
+	font-weight: 600;
+	border-radius: 9999px;
 	white-space: nowrap;
 }
 
 .role-user {
-	background: #e8f4fd;
-	color: #1a6fb5;
-	border: 1px solid #b6d9f2;
+	background: var(--primary-soft);
+	color: var(--primary-dark);
 }
 
 .role-authority {
-	background: #fef3e2;
-	color: #b57a1a;
-	border: 1px solid #f2d9a6;
+	background: #fef3c7;
+	color: #92400e;
 }
 
 .role-admin {
-	background: #fde8e8;
-	color: #b51a1a;
-	border: 1px solid #f2a6a6;
+	background: #fee2e2;
+	color: #991b1b;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
 	.header {
-		height: 70px;
-		min-height: 70px;
-		max-height: 70px;
+		padding: 16px;
+		gap: 12px;
+		background: var(--surface);
+		border-bottom: 1px solid var(--border);
+		position: sticky;
+		top: 0;
+		z-index: 50;
+	}
+
+	.menuButton {
+		display: flex;
+	}
+
+	.leftSection {
 		flex-direction: row;
 		align-items: center;
 		gap: 12px;
-		padding: 0 12px;
+		flex-wrap: nowrap;
+		flex: 1;
+		min-width: 0;
 	}
 
-	.logo {
-		width: auto;
-		min-width: 0;
-		flex: 1 1 auto;
-		gap: 8px;
-		white-space: nowrap;
+	.breadcrumb {
+		display: none;
 	}
 
-	.authContainer {
-		width: auto;
-		min-width: 0;
-		flex: 0 0 auto;
-		justify-content: flex-end;
-		gap: 8px;
+	.pageTitle {
+		font-size: 1.25rem;
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		margin: 0;
+	}
+
+	.rightSection {
+		gap: 8px;
+		flex-shrink: 0;
+	}
+
+	.dateDisplay {
+		display: none;
 	}
 
 	.roleBadge {
-		padding: 3px 8px;
-		font-size: 0.68rem;
-	}
-
-	.logoMark {
-		width: 32px;
-		height: 32px;
+		display: none;
 	}
 }
