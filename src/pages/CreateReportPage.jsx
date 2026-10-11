@@ -231,14 +231,17 @@ export default function CreateReportPage() {
 						<span className={styles.legendItem}><span className={styles.dot} style={{ background: '#2d7a5d' }} /> Path Start</span>
 						<span className={styles.legendItem}><span className={styles.dot} style={{ background: '#bd3e50' }} /> Path End</span>
 					</div>
-					<div ref={mapContainer} className={styles.map} />
+					<div className={styles.mapWrap}>
+						<div ref={mapContainer} className={styles.map} />
+						{isResolving && <div className={styles.resolvingOverlay} aria-hidden="true"><span className={styles.resolvingSpinner} /> Resolving address…</div>}
+					</div>
 					{locationError && <div className={styles.warning} role="alert">{locationError}</div>}
 					<div className={styles.routePoints}>
 						{startLocation.address && <div className={styles.address}><strong>Path Start</strong><span>{startLocation.address}</span><small className={styles.snapStatus}>{startLocation.roadName ? `Snapped ${Math.round(startLocation.snapDistance)} m to ${startLocation.roadName}` : 'Matched to nearest road'}</small></div>}
 						{destLocation.address && <div className={styles.address}><strong>Path End</strong><span>{destLocation.address}</span><small className={styles.snapStatus}>{destLocation.roadName ? `Snapped ${Math.round(destLocation.snapDistance)} m to ${destLocation.roadName}` : 'Matched to nearest road'}</small></div>}
 					</div>
 				</div>
-				<div className={styles.actions}><button type="button" className="ghost-btn danger-btn" onClick={() => navigate('/feed')}>Cancel</button><button type="submit" className="primary-btn" disabled={isSubmitting || isResolving}>{isSubmitting ? 'Submitting...' : 'Submit Report'}</button></div>
+				<div className={styles.actions}><button type="submit" className="primary-btn" disabled={isSubmitting || isResolving}>{isSubmitting ? 'Submitting...' : 'Submit Report'}</button></div>
 			</form>
 		</section>
 	);

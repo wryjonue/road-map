@@ -16,6 +16,7 @@ RoadMap is a website for reporting road hazards, viewing incident locations in t
 - Cloudflare Vite Plugin for **Template**
 - Cloudflare D1 for **Relational Database**
 - Cloudflare R2 for **Object Storage**
+- Cloudflare Durable Objects for **WebSocket Functions**
 - Cloudflare Wrangler for **Shipping**
 - React 19 and React Router for **Frontend**
 - Clerk for **Authentication**

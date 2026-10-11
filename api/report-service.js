@@ -341,7 +341,7 @@ async function createStaticMap(env, reportId, longitude, latitude, routeGeometry
 		// The parameter name is 'geometry' (NOT 'polyline').
 		// Geoapify auto-fits to the geometry when center/area/marker are omitted.
 		const flatCoords = simplified.flatMap((c) => [Number(c[0]).toFixed(6), Number(c[1]).toFixed(6)]).join(',');
-		const geometryParam = `polyline:${flatCoords};linecolor:%230066ff;linewidth:6`;
+		const geometryParam = `polyline:${flatCoords};linecolor:%230066ff;linewidth:10`;
 		url = `https://maps.geoapify.com/v1/staticmap?style=osm-bright-smooth&width=1000&height=600`
 			+ `&geometry=${geometryParam}`
 			+ `&apiKey=${encodeURIComponent(env.GEOAPIFY_API_KEY)}`;

@@ -130,23 +130,13 @@ export default function ViewReportPage() {
 					// Invalid polyline JSON; fall back to point marker below
 				}
 			}
-			if (report.startLocation) {
-				new maplibregl.Marker({ color: '#2d7a5d' })
-					.setLngLat([report.startLocation.longitude, report.startLocation.latitude])
-					.setPopup(new maplibregl.Popup({ offset: 25 }).setText('Start'))
-					.addTo(map);
-			}
-			if (report.destLocation) {
-				new maplibregl.Marker({ color: '#bd3e50' })
-					.setLngLat([report.destLocation.longitude, report.destLocation.latitude])
-					.setPopup(new maplibregl.Popup({ offset: 25 }).setText('Destination'))
-					.addTo(map);
-			}
 			if (!hasRoute) {
 				new maplibregl.Marker({ color: '#c65d2e' }).setLngLat(center).addTo(map);
 			}
 			if (userLocationRef.current) {
-				new maplibregl.Marker({ color: '#3b82f6' }).setLngLat(userLocationRef.current).addTo(map);
+				new maplibregl.Marker({ color: '#3b82f6' })
+				.setLngLat(userLocationRef.current)
+				.setPopup(new maplibregl.Popup({ offset: 25 }).setText('Your Current Location')).addTo(map);
 			}
 		});
 
