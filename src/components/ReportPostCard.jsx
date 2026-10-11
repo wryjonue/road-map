@@ -67,9 +67,12 @@ function AuthorAvatar({ src, name }) {
 	return <div className={styles.avatar}>{src && !failed ? <img src={src} alt={`${name || 'Report author'} avatar`} onError={() => setFailed(true)} /> : initials}</div>;
 }
 
-export default function ReportPostCard({ id, title, poster, authorImageUrl, date, status, description, imageUrl, images, staticMapUrl, category }) {
+export default function ReportPostCard({ id, title, poster, authorImageUrl, date, status, description, imageUrl, images, staticMapUrl, category, city, barangay, province }) {
 	const navigate = useNavigate();
 	const reportImageUrl = images?.[0]?.url || imageUrl;
+
+	// Build a short display location from the most specific available field.
+	const displayLocation = [barangay, city, province].filter((part) => typeof part === 'string' && part.trim()).join(', ') || null;
 
 	const openReport = () => navigate(`/feed/${id}`);
 	const handleKeyDown = (event) => {
@@ -111,11 +114,24 @@ export default function ReportPostCard({ id, title, poster, authorImageUrl, date
 							/>
 						))
 						: <div className={styles.mapPreview} aria-label="Map preview" />}
+					{displayLocation && (
+						<span className={styles.locationOverlay} title={displayLocation}>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.locationIcon}>
+								<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+								<circle cx="12" cy="10" r="3" />
+							</svg>
+							{displayLocation}
+						</span>
+					)}
 				</div>
 				{hasCarousel && (
 					<>
-						<button type="button" className={`${styles.chevron} ${styles.chevronPrev}`} onClick={(e) => goTo(e, activeSlide - 1)} aria-label="Previous image">‹</button>
-						<button type="button" className={`${styles.chevron} ${styles.chevronNext}`} onClick={(e) => goTo(e, activeSlide + 1)} aria-label="Next image">›</button>
+						<button type="button" className={`${styles.chevron} ${styles.chevronPrev}`} onClick={(e) => goTo(e, activeSlide - 1)} aria-label="Previous image">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+						</button>
+						<button type="button" className={`${styles.chevron} ${styles.chevronNext}`} onClick={(e) => goTo(e, activeSlide + 1)} aria-label="Next image">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+						</button>
 						<div className={styles.carouselDots}>
 							{slides.map((slide, i) => (
 								<button key={slide.key} type="button" className={`${styles.dot} ${i === activeSlide ? styles.dotActive : ''}`} onClick={(e) => goTo(e, i)} aria-label={`Go to image ${i + 1}`} />

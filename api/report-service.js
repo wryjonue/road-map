@@ -69,31 +69,72 @@ function parsePagination(url) {
 	if (!Number.isInteger(rawOffset) || rawOffset < 0) return { error: 'offset must be a non-negative integer' };
 	return { limit: Math.min(rawLimit, MAX_PAGE_SIZE), offset: rawOffset };
 }
+const FEED_STATUSES = new Set(['Open', 'Pending', 'Resolved', 'Closed', 'Rejected']);
+const FEED_SORTS = new Set(['recent', 'oldest', 'votes']);
+function feedOrderBy(sort) {
+	if (sort === 'oldest') return 'ORDER BY r.created_at ASC, r.id ASC';
+	if (sort === 'votes') return 'ORDER BY r.vote_count DESC, r.created_at DESC, r.id DESC';
+	return 'ORDER BY r.created_at DESC, r.id DESC';
+}
 export async function listReports(env, url, auth = null) {
 	const pagination = parsePagination(url); if (pagination.error) return errorResponse(pagination.error);
 	const { limit, offset } = pagination;
-	let reportVisibility = '';
-	let countVisibility = '';
-	let reportBindings = [limit, offset];
-	let countBindings = [];
+
+	const rawCategoryId = url.searchParams.get('categoryId');
+	const categoryId = rawCategoryId === null || rawCategoryId === '' ? null : Number(rawCategoryId);
+	if (categoryId !== null && (!Number.isSafeInteger(categoryId) || categoryId < 1)) return errorResponse('categoryId must be a positive integer');
+	const status = url.searchParams.get('status');
+	if (status !== null && status !== '' && !FEED_STATUSES.has(status)) return errorResponse('status must be one of Open, Pending, Resolved, Closed, Rejected');
+	const municipality = url.searchParams.get('municipality');
+	const city = municipality && municipality !== 'all' ? municipality.trim() : null;
+	const qRaw = url.searchParams.get('q');
+	const q = qRaw && qRaw.trim() ? qRaw.trim().slice(0, 200) : null;
+	const sortParam = url.searchParams.get('sort') || 'recent';
+	if (!FEED_SORTS.has(sortParam)) return errorResponse('sort must be one of recent, oldest, votes');
+
+	let filters = '';
+	const filterValues = [];
+	if (categoryId !== null) { filters += ' AND r.category_id = ?'; filterValues.push(categoryId); }
+	if (status !== null && status !== '') { filters += ' AND r.status = ?'; filterValues.push(status); }
+	if (city !== null) { filters += ' AND r.city = ?'; filterValues.push(city); }
+	if (q !== null) { filters += ' AND (r.title LIKE ? OR r.description LIKE ?)'; const like = `%${q}%`; filterValues.push(like, like); }
+
+	// Pending visibility: non-managers only see their own pending (or none if signed out).
+	let visibility = '';
+	const visibilityValues = [];
 	if (!canManageReports(auth)) {
 		if (auth?.userId) {
-			reportVisibility = " AND (r.status <> 'Pending' OR r.author_id = ?)";
-			countVisibility = " AND (status <> 'Pending' OR author_id = ?)";
-			reportBindings = [auth.userId, limit, offset];
-			countBindings = [auth.userId];
+			visibility = " AND (r.status <> 'Pending' OR r.author_id = ?)";
+			visibilityValues.push(auth.userId);
 		} else {
-			reportVisibility = " AND r.status <> 'Pending'";
-			countVisibility = " AND status <> 'Pending'";
+			visibility = " AND r.status <> 'Pending'";
 		}
 	}
+
+	const whereBase = `WHERE r.deleted_at IS NULL${filters}${visibility}`;
+	// Count query uses the same predicates but without the r. alias on the base reports table.
+	const countFilters = filters.replaceAll('r.', '');
+	const countVisibility = visibility.replaceAll('r.', '');
+	const countWhere = `WHERE deleted_at IS NULL${countFilters}${countVisibility}`;
+
+	const orderBy = feedOrderBy(sortParam);
 	const [{ results }, countResult] = await Promise.all([
-		env.road_map_db.prepare(`${REPORT_SELECT} WHERE r.deleted_at IS NULL${reportVisibility} ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`).bind(...reportBindings).all(),
-		env.road_map_db.prepare(`SELECT COUNT(*) AS total FROM reports WHERE deleted_at IS NULL${countVisibility}`).bind(...countBindings).all(),
+		env.road_map_db.prepare(`${REPORT_SELECT} ${whereBase} ${orderBy} LIMIT ? OFFSET ?`).bind(...filterValues, ...visibilityValues, limit, offset).all(),
+		env.road_map_db.prepare(`SELECT COUNT(*) AS total FROM reports ${countWhere}`).bind(...filterValues, ...visibilityValues).all(),
 	]);
 	const reports = await Promise.all(results.map(async (row) => { const { results: images } = await env.road_map_db.prepare('SELECT id, r2_key, file_name, content_type FROM report_images WHERE report_id = ? ORDER BY id').bind(row.id).all(); return toReport(row, images); }));
 	const total = countResult.results[0]?.total ?? 0;
 	return json({ reports, pagination: { limit, offset, total, hasMore: offset + reports.length < total } });
+}
+export async function getReportFacets(env) {
+	const [{ results: categories }, { results: cities }] = await Promise.all([
+		env.road_map_db.prepare('SELECT id, name, slug FROM categories ORDER BY id').all(),
+		env.road_map_db.prepare("SELECT DISTINCT city FROM reports WHERE deleted_at IS NULL AND city IS NOT NULL AND city <> '' ORDER BY city").all(),
+	]);
+	return json({
+		categories: categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+		municipalities: cities.map((row) => row.city).filter(Boolean),
+	});
 }
 export async function getMapReports(env, url) {
 	const pagination = parsePagination(url);
@@ -348,7 +389,7 @@ async function createStaticMap(env, reportId, longitude, latitude, routeGeometry
 		console.log(url);
 		console.log('[static-map] geometry url length=', url.length, 'points=', simplified.length);
 	} else {
-		const params = new URLSearchParams({ style: 'osm-bright-smooth', width: '1000', height: '600', center: `lonlat:${longitude},${latitude}`, zoom: '12', marker: `lonlat:${longitude},${latitude}`, apiKey: env.GEOAPIFY_API_KEY });
+		const params = new URLSearchParams({ style: 'osm-bright-smooth', width: '1000', height: '600', center: `lonlat:${longitude},${latitude}`, zoom: '16', marker: `lonlat:${longitude},${latitude}`, apiKey: env.GEOAPIFY_API_KEY });
 		url = `https://maps.geoapify.com/v1/staticmap?${params}`;
 	}
 	let response;

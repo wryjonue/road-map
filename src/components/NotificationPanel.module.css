@@ -21,8 +21,9 @@
 }
 
 .bellIcon {
-	font-size: 1.1rem;
-	line-height: 1;
+	width: 20px;
+	height: 20px;
+	display: block;
 }
 
 .badge {

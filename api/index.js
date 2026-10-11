@@ -1,4 +1,4 @@
-import { approveReport, createReport, deletePendingReport, getHotspots, getMapReports, getMedia, getReport, getVoteStatus, listReports, rejectReport, resolveReport, voteReport } from './report-service.js';
+import { approveReport, createReport, deletePendingReport, getHotspots, getMapReports, getMedia, getReport, getReportFacets, getVoteStatus, listReports, rejectReport, resolveReport, voteReport } from './report-service.js';
 import { getDashboardMetrics, getMonthlyReport } from './dashboard-service.js';
 import { getCalculatedRoute, getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
@@ -145,6 +145,12 @@ const voteMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
 				const auth = await getOptionalUser(request, env);
 				if (auth instanceof Response) return auth;
 				return getMedia(request, env, decodeURIComponent(mediaMatch[1]), auth);
+			}
+			if (url.pathname === '/api/reports/facets') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await getOptionalUser(request, env);
+				if (auth instanceof Response) return auth;
+				return getReportFacets(env);
 			}
 			const reportMatch = url.pathname.match(/^\/api\/reports\/?(\d+)?$/);
 			if (!reportMatch) return Response.json({ error: 'Route not found' }, { status: 404 });

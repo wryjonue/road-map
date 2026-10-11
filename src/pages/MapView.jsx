@@ -184,8 +184,8 @@ export default function MapView() {
 				source: 'route-lines',
 				paint: {
 					'line-color': ['get', 'lineColor'],
-					'line-width': 6,
-					'line-opacity': 0.85,
+					'line-width': 10,
+					'line-opacity': 1,
 				},
 			});
 			map.addSource(SOURCE_ID, {
