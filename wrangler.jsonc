@@ -41,6 +41,15 @@
 			"binding": "ROAD_MAP_MEDIA",
 			"bucket_name": "road-map-media"
 		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{ "name": "NOTIFICATION_HUB", "class_name": "NotificationHub" },
+			{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }
+		]
+	},
+	"migrations": [
+		{ "tag": "v1", "new_sqlite_classes": ["NotificationHub", "ChatRoom"] }
 	]
 	/**
 	 * Smart Placement

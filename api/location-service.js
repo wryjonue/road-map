@@ -66,16 +66,21 @@ function ensureBataan(address) {
 export async function resolveRoadLocation(latitude, longitude, env, signal) {
 	validateCoordinates(latitude, longitude);
 	if (!env.GEOAPIFY_API_KEY) throw new LocationResolutionError('GEOAPIFY_API_KEY is not configured', 503);
+	console.log('[resolve] input lat/lng=', latitude, longitude);
 	const matchResult = await fetchJson(`https://api.geoapify.com/v1/mapmatching?apiKey=${encodeURIComponent(env.GEOAPIFY_API_KEY)}`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ mode: 'drive', waypoints: [{ location: [longitude, latitude] }, { location: [longitude, latitude] }] }),
 	}, signal);
+	// Full unfiltered Geoapify map-matching (snap) GeoJSON — includes road/leg/step labels.
+	console.log('[resolve] Geoapify mapmatch full GeoJSON=', JSON.stringify(matchResult));
 	const snapped = getMatchedLocation(matchResult);
 	const params = new URLSearchParams({ format: 'json', addressdetails: '1', lat: String(snapped.latitude), lon: String(snapped.longitude) });
 	const addressResult = await fetchJson(`https://nominatim.openstreetmap.org/reverse?${params}`, {
 		headers: { Accept: 'application/json', 'User-Agent': 'RoadMapApp/1.0 (road incident reporting)' },
 	}, signal);
+	// Full unfiltered Nominatim reverse-geocode response — includes road, city, suburb, etc.
+	console.log('[resolve] Nominatim reverse-geocode full response=', JSON.stringify(addressResult));
 	const address = addressResult?.address;
 	if (!address || typeof addressResult.display_name !== 'string') throw new LocationResolutionError('No address was found for the matched road', 422);
 	ensureBataan(address);

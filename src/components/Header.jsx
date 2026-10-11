@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Link } from 'react-router';
 import { Show, useAuth, UserButton } from '@clerk/react';
 import { useAppRole } from '../auth/roles';
+import NotificationPanel from './NotificationPanel';
 import styles from './Header.module.css';
 
 const ROLE_LABELS = { user: 'User', authority: 'Enforcer', admin: 'Admin' };
@@ -56,6 +57,7 @@ export default function Header() {
 						{ROLE_LABELS[role] || 'User'}
 					</span>
 				)}
+				<NotificationPanel />
 				<Show when="signed-in">
 					<UserButton />
 				</Show>

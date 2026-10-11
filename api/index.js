@@ -3,11 +3,40 @@ import { getDashboardMetrics, getMonthlyReport } from './dashboard-service.js';
 import { getCalculatedRoute, getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
+import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from './notification-service.js';
+
+// Durable Object classes must be exported from the Worker entry so Wrangler can bind them.
+export { NotificationHub } from './durable-objects/notification-hub.js';
+export { ChatRoom } from './durable-objects/chat-room.js';
 
 export default {
 	async fetch(request, env) {
 		const url = new URL(request.url);
 		try {
+			// WebSocket upgrade: per-user notification hub.
+			if (url.pathname === '/ws/notifications') {
+				// Browser WebSocket cannot send Authorization headers; accept token via query param.
+				const wsToken = url.searchParams.get('token');
+				let auth;
+				if (wsToken) {
+					const syntheticRequest = new Request(request.url, { headers: { Authorization: `Bearer ${wsToken}` } });
+					auth = await requireUser(syntheticRequest, env);
+				} else {
+					auth = await requireUser(request, env);
+				}
+				if (auth instanceof Response) return auth;
+				const stub = env.NOTIFICATION_HUB.getByName(`user:${auth.userId}`);
+				return stub.fetch(request);
+			}
+			// WebSocket upgrade: per-room chat.
+			const chatMatch = url.pathname.match(/^\/ws\/chat\/([^/]+)$/);
+			if (chatMatch) {
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				const roomId = decodeURIComponent(chatMatch[1]);
+				const stub = env.CHAT_ROOM.getByName(`room:${roomId}`);
+				return stub.fetch(request);
+			}
 			if (url.pathname === '/api/location/resolve') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
 				const auth = await requireUser(request, env);
@@ -52,6 +81,31 @@ export default {
 				const auth = await getOptionalUser(request, env);
 				if (auth instanceof Response) return auth;
 				return getHotspots(env, url);
+			}
+			if (url.pathname === '/api/notifications/unread-count') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				return getUnreadCount(env, auth.userId);
+			}
+			if (url.pathname === '/api/notifications/read-all') {
+				if (request.method !== 'PATCH') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				return markAllAsRead(env, auth.userId);
+			}
+			const notifReadMatch = url.pathname.match(/^\/api\/notifications\/(\d+)\/read$/);
+			if (notifReadMatch) {
+				if (request.method !== 'PATCH') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				return markAsRead(env, Number(notifReadMatch[1]), auth.userId);
+			}
+			if (url.pathname === '/api/notifications') {
+				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				return getNotifications(env, auth.userId, url);
 			}
 			const statusMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/status$/);
 			if (statusMatch) {

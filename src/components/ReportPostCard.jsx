@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { useAuth } from '@clerk/react';
 import styles from './ReportPostCard.module.css';
 
@@ -67,79 +67,74 @@ function AuthorAvatar({ src, name }) {
 	return <div className={styles.avatar}>{src && !failed ? <img src={src} alt={`${name || 'Report author'} avatar`} onError={() => setFailed(true)} /> : initials}</div>;
 }
 
-export default function ReportPostCard({ id, title, avatar, poster, authorImageUrl, date, status, description, votes, comments, imageUrl, images, staticMapUrl, category, canChangeStatus, canDelete, isStatusUpdating, isBusy, onStatusChange, onDelete, onVote }) {
-	const statusClass = `status-badge status-${status.toLowerCase()}`;
-	const statusOptions = canChangeStatus && status === 'Pending'
-		? [{ label: 'Approve Report', value: 'Open' }, { label: 'Deny Report', value: 'Rejected' }]
-		: canChangeStatus && status === 'Open' ? [{ label: 'Resolve report', value: 'Resolved' }] : [];
-	if (canDelete && (status === 'Pending' || status === 'Open')) statusOptions.push({ label: 'Delete', value: 'Delete' });
+export default function ReportPostCard({ id, title, poster, authorImageUrl, date, status, description, imageUrl, images, staticMapUrl, category }) {
+	const navigate = useNavigate();
 	const reportImageUrl = images?.[0]?.url || imageUrl;
-	const hasImage = Boolean(reportImageUrl);
 
-	const [voteCount, setVoteCount] = useState(votes);
-	const [hasVoted, setHasVoted] = useState(false);
-	const [isVoting, setIsVoting] = useState(false);
-
-	const handleVote = async () => {
-		if (isVoting || !onVote) return;
-		setIsVoting(true);
-		try {
-			const result = await onVote(id);
-			if (result) {
-				setVoteCount(result.voteCount);
-				setHasVoted(result.hasVoted);
-			}
-		} finally {
-			setIsVoting(false);
+	const openReport = () => navigate(`/feed/${id}`);
+	const handleKeyDown = (event) => {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			openReport();
 		}
 	};
 
+	// Build the carousel slide list from whatever media actually exists.
+	const slides = useMemo(() => {
+		const list = [];
+		if (reportImageUrl) list.push({ key: 'image', src: reportImageUrl, alt: 'Incident report' });
+		if (staticMapUrl) list.push({ key: 'map', src: staticMapUrl, alt: 'Static map of incident location' });
+		return list;
+	}, [reportImageUrl, staticMapUrl]);
+	const hasCarousel = slides.length > 1;
+	const [activeSlide, setActiveSlide] = useState(0);
+
+	const goTo = (event, index) => {
+		event.preventDefault();
+		event.stopPropagation();
+		setActiveSlide((index + slides.length) % slides.length);
+	};
+
 	return (
-		<article className={styles.card}>
-			<div className={styles.header}>
-				<div className={styles.posterMeta}>
-					{category && <span className={styles.categoryBadge} style={{ '--category-color': CATEGORY_COLORS[category.id] || '#5f6972' }}>{category.name}</span>}
-					<div className={styles.posterRow}>
-						<AuthorAvatar src={authorImageUrl} name={poster || avatar} />
-						<div>
-							<h3>{title}</h3>
-							<p>{poster} · {date}</p>
+		<article className={styles.card} onClick={openReport} onKeyDown={handleKeyDown} role="link" tabIndex={0} aria-label={`View report: ${title}`}>
+			<Link to={`/feed/${id}`} className={styles.stretchedLink} aria-hidden="true" tabIndex={-1} />
+
+			<div className={styles.mediaCarousel}>
+				<div className={styles.mediaFrame}>
+					{slides.length > 0
+						? slides.map((slide, i) => (
+							<ReportMediaImage
+								key={slide.key}
+								className={`${styles.slide} ${i === activeSlide ? styles.slideActive : styles.slideHidden}`}
+								src={slide.src}
+								alt={slide.alt}
+							/>
+						))
+						: <div className={styles.mapPreview} aria-label="Map preview" />}
+				</div>
+				{hasCarousel && (
+					<>
+						<button type="button" className={`${styles.chevron} ${styles.chevronPrev}`} onClick={(e) => goTo(e, activeSlide - 1)} aria-label="Previous image">‹</button>
+						<button type="button" className={`${styles.chevron} ${styles.chevronNext}`} onClick={(e) => goTo(e, activeSlide + 1)} aria-label="Next image">›</button>
+						<div className={styles.carouselDots}>
+							{slides.map((slide, i) => (
+								<button key={slide.key} type="button" className={`${styles.dot} ${i === activeSlide ? styles.dotActive : ''}`} onClick={(e) => goTo(e, i)} aria-label={`Go to image ${i + 1}`} />
+							))}
 						</div>
-					</div>
-				</div>
-				{(canChangeStatus || canDelete) && statusOptions.length > 0 ? <select className={statusClass} value={status} onChange={(event) => event.target.value === 'Delete' ? onDelete() : onStatusChange(event.target.value)} disabled={isBusy} aria-label={`Change report status from ${status}`}>
-					<option value={status}>{isStatusUpdating ? 'Updating...' : status}</option>
-					{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-				</select> : <span className={statusClass}>{status}</span>}
+					</>
+				)}
 			</div>
 
-			<div className={`${styles.body} ${!hasImage ? styles.bodyNoImage : ''}`}>
-				<div className={styles.copy}>
-					<p className={styles.description}>{description}</p>
-					{hasImage && <ReportMediaImage className={styles.uploadedImage} src={reportImageUrl} alt="Incident report" />}
+			<div className={styles.cardBody}>
+				<div className={styles.badgeRow}>
+					{category && <span className={styles.categoryBadge} style={{ '--category-color': CATEGORY_COLORS[category.id] || '#5f6972' }}>{category.name}</span>}
+					<span className={`${styles.statusPill} ${styles[`status-${status.toLowerCase()}`]}`}>{status}</span>
 				</div>
-				<div className={styles.mapPreviewWrapper}>
-					{staticMapUrl ? <ReportMediaImage className={styles.mapImage} src={staticMapUrl} alt="Static map of incident location" /> : <div className={styles.mapPreview} aria-label="Map preview" />}
-				</div>
-			</div>
-
-			<div className={styles.footer}>
-				<div className={styles.actions}>
-					<Link to={`/feed/${id}`} className="primary-btn action-link">View Details</Link>
-					<button
-						type="button"
-						className={`secondary-btn vote-button ${hasVoted ? 'voted' : ''}`}
-						onClick={handleVote}
-						disabled={isVoting}
-						aria-pressed={hasVoted}
-						aria-label={hasVoted ? 'Remove upvote' : 'Upvote report'}
-					>
-						{isVoting ? 'Voting...' : 'Upvote'}
-					</button>
-				</div>
-				<div className={styles.actions}>
-					<button type="button" className="secondary-btn unclickable-btn">Votes ({voteCount})</button>
-					<button type="button" className="ghost-btn unclickable-btn">Comments ({comments})</button>
+				<h3 className={styles.title}>{title}</h3>
+				<p className={styles.description}>{description}</p>
+				<div className={styles.posterRow}>
+					<AuthorAvatar src={authorImageUrl} name={poster} />
+					<p className={styles.meta}>{poster} · {date}</p>
 				</div>
 			</div>
 		</article>

@@ -1,6 +1,7 @@
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
 import { computeHotspots } from './clustering.js';
 import { calculateRoute } from './routing-service.js';
+import { createNotification } from './notification-service.js';
 
 const MAX_PAGE_SIZE = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -202,21 +203,23 @@ export async function getReport(env, id, status = 200, auth = null) {
 export async function approveReport(env, id, auth) {
 	if (!canManageReports(auth)) return errorResponse('Insufficient permissions', 403);
 	if (!Number.isSafeInteger(id) || id < 1) return errorResponse('Report not found', 404);
-	const report = await env.road_map_db.prepare('SELECT status FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+	const report = await env.road_map_db.prepare('SELECT status, author_id FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
 	if (!report) return errorResponse('Report not found', 404);
 	if (report.status !== 'Pending') return errorResponse('Only pending reports can be approved', 409);
 	const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Open', updated_at = ? WHERE id = ? AND status = 'Pending' AND deleted_at IS NULL").bind(new Date().toISOString(), id).run();
 	if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
+	await createNotification(env, { userId: report.author_id, type: 'report_approved', reportId: id, actorId: auth.userId, message: 'Your report was approved and is now visible to the community.' });
 	return getReport(env, id, 200, auth);
 }
 export async function rejectReport(env, id, auth) {
 	if (!canManageReports(auth)) return errorResponse('Insufficient permissions', 403);
 	if (!Number.isSafeInteger(id) || id < 1) return errorResponse('Report not found', 404);
-	const report = await env.road_map_db.prepare('SELECT status FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+	const report = await env.road_map_db.prepare('SELECT status, author_id FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
 	if (!report) return errorResponse('Report not found', 404);
 	if (report.status !== 'Pending') return errorResponse('Only pending reports can be rejected', 409);
 	const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Rejected', updated_at = ? WHERE id = ? AND status = 'Pending' AND deleted_at IS NULL").bind(new Date().toISOString(), id).run();
 	if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
+	await createNotification(env, { userId: report.author_id, type: 'report_rejected', reportId: id, actorId: auth.userId, message: 'Your report was rejected by an enforcer.' });
 	return getReport(env, id, 200, auth);
 }
 export async function deletePendingReport(env, id, auth) {
@@ -236,13 +239,14 @@ export async function deletePendingReport(env, id, auth) {
 export async function resolveReport(env, id, auth) {
 	if (!canManageReports(auth)) return errorResponse('Insufficient permissions', 403);
 	if (!Number.isSafeInteger(id) || id < 1) return errorResponse('Report not found', 404);
-	const report = await env.road_map_db.prepare('SELECT status FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
+	const report = await env.road_map_db.prepare('SELECT status, author_id FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
 	if (!report) return errorResponse('Report not found', 404);
 	if (report.status === 'Pending') return errorResponse('Pending reports must be approved before resolution', 409);
 	if (report.status !== 'Resolved') {
 		const resolvedAt = new Date().toISOString();
 		const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Resolved', updated_at = ?, resolved_at = ?, resolved_by = ? WHERE id = ? AND status NOT IN ('Pending', 'Resolved') AND deleted_at IS NULL").bind(resolvedAt, resolvedAt, auth.userId, id).run();
 		if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
+		await createNotification(env, { userId: report.author_id, type: 'report_resolved', reportId: id, actorId: auth.userId, message: 'Your report was marked as resolved.' });
 	}
 	return getReport(env, id, 200, auth);
 }
@@ -326,17 +330,23 @@ async function createStaticMap(env, reportId, longitude, latitude, routeGeometry
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), GEOAPIFY_TIMEOUT);
 	let url;
-	// Note: Geoapify's static map polyline/geojson params have been unreliable for short routes.
-	// For now, render only the start/destination markers with fit=auto. The full route line is
-	// visible on the interactive maps (CreateReport preview, MapView, ViewReport page).
 	if (routeGeometry && Array.isArray(routeGeometry.coordinates) && routeGeometry.coordinates.length > 0) {
-		const startMarker = `lonlat:${Number(startLng).toFixed(6)},${Number(startLat).toFixed(6)};color:%232d7a5d;size:32`;
-		const destMarker = `lonlat:${Number(destLng).toFixed(6)},${Number(destLat).toFixed(6)};color:%23bd3e50;size:32`;
-		const markerParam = `${startMarker}|${destMarker}`;
+		// Simplify to ~40 points to keep the URL short.
+		const coords = routeGeometry.coordinates;
+		const step = Math.max(1, Math.floor(coords.length / 40));
+		const simplified = coords.filter((_, i) => i % step === 0 || i === coords.length - 1);
+		// Geoapify geometry format (from working sample URL):
+		//   geometry=polyline:lng1,lat1,lng2,lat2,...;fillcolor:%23hex
+		// All coordinates are comma-separated in a flat list (NOT pipe-separated).
+		// The parameter name is 'geometry' (NOT 'polyline').
+		// Geoapify auto-fits to the geometry when center/area/marker are omitted.
+		const flatCoords = simplified.flatMap((c) => [Number(c[0]).toFixed(6), Number(c[1]).toFixed(6)]).join(',');
+		const geometryParam = `polyline:${flatCoords};linecolor:%230066ff;linewidth:6`;
 		url = `https://maps.geoapify.com/v1/staticmap?style=osm-bright-smooth&width=1000&height=600`
-			+ `&marker=${markerParam}`
-			+ `&fit=auto&apiKey=${encodeURIComponent(env.GEOAPIFY_API_KEY)}`;
-		console.log('[static-map] markers-only url length=', url.length);
+			+ `&geometry=${geometryParam}`
+			+ `&apiKey=${encodeURIComponent(env.GEOAPIFY_API_KEY)}`;
+		console.log(url);
+		console.log('[static-map] geometry url length=', url.length, 'points=', simplified.length);
 	} else {
 		const params = new URLSearchParams({ style: 'osm-bright-smooth', width: '1000', height: '600', center: `lonlat:${longitude},${latitude}`, zoom: '12', marker: `lonlat:${longitude},${latitude}`, apiKey: env.GEOAPIFY_API_KEY });
 		url = `https://maps.geoapify.com/v1/staticmap?${params}`;
