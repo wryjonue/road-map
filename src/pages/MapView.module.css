@@ -1,6 +1,6 @@
 .mapPage {
 	display: grid;
-	gap: 16px;
+	gap: 24px;
 	min-width: 0;
 }
 
@@ -17,107 +17,99 @@
 }
 
 .resultCount {
-	color: var(--muted);
+	color: var(--text-muted);
 	font-size: .85rem;
 	white-space: nowrap;
 }
 
-.toolbar {
+.filterBar {
 	display: flex;
-	align-items: end;
-	gap: 12px;
 	flex-wrap: wrap;
-	padding-bottom: 14px;
-	border-bottom: 1px solid var(--border);
+	align-items: center;
+	gap: 12px;
 }
 
-.filterControl {
-	display: grid;
-	gap: 6px;
-	min-width: 190px;
-	flex: 1 1 190px;
-}
-
-.filterControl > span,
-.colorControl legend {
-	font-size: .76rem;
-	font-weight: 700;
-	color: var(--muted);
-}
-
-.filterControl select {
-	min-height: 42px;
-	width: 100%;
-	padding: 8px 34px 8px 10px;
-	border: 2px solid var(--border);
-	background: var(--surface);
+.filterSelect {
+	padding: 9px 34px 9px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background-color: var(--surface);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 10px center;
+	background-size: 16px;
 	color: var(--text);
-}
-
-.colorControl {
-	min-width: 230px;
-	margin: 0;
-	padding: 0;
-	border: 0;
-}
-
-.colorControl legend {
-	margin-bottom: 6px;
-	padding: 0;
-}
-
-.segmentedControl {
-	display: inline-flex;
-	min-height: 42px;
-	border: 2px solid var(--border);
-}
-
-.segmentedControl button {
-	min-width: 108px;
-	padding: 8px 12px;
-	border: 0;
-	background: var(--surface);
-	color: var(--text);
-	font-weight: 700;
+	font-size: 0.85rem;
+	font-weight: 500;
 	cursor: pointer;
+	appearance: none;
+	transition: border-color 0.2s ease;
 }
 
-.segmentedControl button + button {
-	border-left: 2px solid var(--border);
+.filterSelect:hover {
+	border-color: var(--text-muted);
 }
 
-.segmentedControl button[aria-pressed='true'] {
+.filterSelect:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+
+.pinToggle {
+	display: inline-flex;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	overflow: hidden;
+	background: var(--surface);
+}
+
+.pinButton {
+	padding: 9px 16px;
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: 0.85rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pinButton + .pinButton {
+	border-left: 1px solid var(--border);
+}
+
+.pinButtonActive {
 	background: var(--text);
 	color: white;
 }
 
-.hotspotToggle {
-	min-width: 120px;
-	flex: 0 0 120px;
-}
-
-.toggleButton {
-	min-height: 42px;
-	width: 100%;
-	padding: 8px 16px;
-	border: 2px solid var(--border);
+.pillToggle {
+	padding: 9px 16px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
 	background: var(--surface);
 	color: var(--text);
-	font-weight: 700;
+	font-size: 0.85rem;
+	font-weight: 600;
 	cursor: pointer;
+	transition: all 0.15s ease;
 }
 
-.toggleButton[aria-pressed='true'] {
-	background: #e74c3c;
-	color: white;
-	border-color: #e74c3c;
+.pillToggle:hover {
+	border-color: var(--text-muted);
 }
 
-.segmentedControl button:focus-visible,
-.filterControl select:focus-visible,
-.closePreview:focus-visible,
-.toggleButton:focus-visible {
-	outline: 3px solid var(--primary);
+.pillToggleActive {
+	background: rgba(239, 68, 68, .1);
+	color: #dc2626;
+	border-color: rgba(239, 68, 68, .4);
+}
+
+.pinButton:focus-visible,
+.pillToggle:focus-visible,
+.filterSelect:focus-visible,
+.closePreview:focus-visible {
+	outline: 2px solid var(--primary);
 	outline-offset: 2px;
 }
 
@@ -126,7 +118,7 @@
 	align-items: center;
 	gap: 14px;
 	min-height: 24px;
-	padding: 0 2px 4px;
+	padding: 0 2px;
 	overflow-x: auto;
 }
 
@@ -134,7 +126,7 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	color: var(--muted);
+	color: var(--text-muted);
 	font-size: .72rem;
 	white-space: nowrap;
 }
@@ -143,28 +135,33 @@
 	width: 11px;
 	height: 11px;
 	flex: 0 0 11px;
-	border: 1px solid #17171755;
+	border-radius: 3px;
+	border: 1px solid rgba(15, 23, 42, .12);
 	background: var(--legend-color);
 }
 
 .error {
 	margin: 0;
-	padding: 10px 12px;
-	border-left: 4px solid var(--danger);
-	background: rgba(192, 57, 43, .08);
+	padding: 12px 16px;
+	border-radius: var(--radius-sm);
+	background: rgba(239, 68, 68, .1);
 	color: var(--danger);
+	border: 1px solid rgba(239, 68, 68, .2);
 }
 
 .mapStage {
 	position: relative;
 	min-width: 0;
+	border-radius: var(--radius);
+	border: 1px solid var(--border-light);
+	box-shadow: var(--shadow-sm);
+	overflow: hidden;
 }
 
 .mapCanvas {
 	width: 100%;
-	height: min(68vh, 720px);
-	min-height: 480px;
-	border: 2px solid var(--border);
+	height: clamp(440px, 68vh, 720px);
+	min-height: 420px;
 	background: var(--bg-strong);
 }
 
@@ -174,10 +171,13 @@
 	left: 50%;
 	max-width: calc(100% - 28px);
 	transform: translateX(-50%);
-	padding: 8px 12px;
-	border: 1px solid var(--border);
+	padding: 8px 14px;
+	border: 1px solid var(--border-light);
+	border-radius: 9999px;
 	background: rgba(255, 255, 255, .95);
-	color: var(--muted);
+	backdrop-filter: blur(4px);
+	box-shadow: var(--shadow-sm);
+	color: var(--text-muted);
 	font-size: .8rem;
 	text-align: center;
 	pointer-events: none;
@@ -192,21 +192,25 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	border: 2px solid var(--border);
+	border: 1px solid var(--border-light);
+	border-radius: var(--radius-sm);
 	background: rgba(255, 255, 255, .97);
 	color: var(--text);
-	font-size: 1.35rem;
+	font-size: 1.25rem;
+	line-height: 1;
 	cursor: pointer;
-	box-shadow: 2px 2px 0 rgba(23, 23, 23, .15);
+	box-shadow: var(--shadow-sm);
+	transition: background 0.15s ease, box-shadow 0.15s ease;
 	z-index: 2;
 }
 
 .locateButton:hover {
-	background: #f0f0f0;
+	background: #f8fafc;
+	box-shadow: var(--shadow-md);
 }
 
 .locateButton:focus-visible {
-	outline: 3px solid var(--primary);
+	outline: 2px solid var(--primary);
 	outline-offset: 2px;
 }
 
@@ -227,9 +231,12 @@
 	max-width: calc(100% - 80px);
 	transform: translateX(-50%);
 	padding: 8px 14px;
-	border: 1px solid var(--border);
+	border: 1px solid var(--border-light);
+	border-radius: 9999px;
 	background: rgba(255, 255, 255, .95);
-	color: var(--muted);
+	backdrop-filter: blur(4px);
+	box-shadow: var(--shadow-sm);
+	color: var(--text-muted);
 	font-size: .78rem;
 	text-align: center;
 	pointer-events: none;
@@ -237,9 +244,9 @@
 }
 
 .locationStatus[role='alert'] {
-	border-color: var(--danger);
+	border-color: rgba(239, 68, 68, .3);
 	color: var(--danger);
-	background: rgba(192, 57, 43, .08);
+	background: rgba(254, 242, 242, .95);
 }
 
 .preview {
@@ -250,9 +257,12 @@
 	max-height: calc(100% - 24px);
 	overflow-y: auto;
 	padding: 16px;
-	border: 2px solid var(--border);
+	border: 1px solid var(--border-light);
+	border-radius: var(--radius);
 	background: rgba(255, 255, 255, .97);
-	box-shadow: 3px 3px 0 rgba(23, 23, 23, .22);
+	backdrop-filter: blur(6px);
+	box-shadow: var(--shadow-md);
+	z-index: 3;
 }
 
 .previewHeading {
@@ -277,11 +287,18 @@
 	width: 32px;
 	height: 32px;
 	flex: 0 0 32px;
-	border: 1px solid var(--border);
+	border: 1px solid var(--border-light);
+	border-radius: var(--radius-sm);
 	background: white;
 	color: var(--text);
 	font-size: 1.2rem;
+	line-height: 1;
 	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.closePreview:hover {
+	background: var(--bg-app);
 }
 
 .previewMeta {
@@ -290,15 +307,16 @@
 	gap: 10px;
 	flex-wrap: wrap;
 	margin-top: 12px;
-	color: var(--muted);
+	color: var(--text-muted);
 	font-size: .78rem;
 }
 
 .openStatus,
 .resolvedStatus {
-	padding: 3px 7px;
-	border: 1px solid currentColor;
-	font-weight: 700;
+	padding: 3px 9px;
+	border-radius: 9999px;
+	font-weight: 600;
+	font-size: .72rem;
 }
 
 .openStatus {
@@ -307,8 +325,8 @@
 }
 
 .resolvedStatus {
-	background: #f0f0f0;
-	color: var(--text);
+	background: rgba(100, 116, 139, .14);
+	color: var(--text-muted);
 }
 
 .previewAddress,
@@ -329,30 +347,32 @@
 	font-size: .7rem;
 }
 
-@media (max-width: 720px) {
-	.mapPage {
-		padding: 14px;
-	}
-
+@media (max-width: 768px) {
 	.heading {
 		align-items: flex-start;
+		flex-direction: column;
+		gap: 6px;
 	}
 
-	.filterControl,
-	.colorControl {
-		min-width: 0;
-		flex: 1 1 100%;
+	.filterBar {
+		flex-direction: column;
+		align-items: stretch;
 	}
 
-	.segmentedControl {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
+	.filterSelect,
+	.pinToggle,
+	.pillToggle {
 		width: 100%;
 	}
 
+	.pinToggle {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+	}
+
 	.mapCanvas {
-		height: 62vh;
-		min-height: 380px;
+		height: clamp(380px, 60vh, 520px);
+		min-height: 360px;
 	}
 
 	.preview {

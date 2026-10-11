@@ -110,9 +110,9 @@ export default function MonthlyIncidentReport() {
 							<thead>
 								<tr>
 									<th>CATEGORY</th>
-									<th>TOTAL</th>
-									<th>RESOLVED</th>
-									<th>ACTIVE</th>
+									<th className={styles.numCol}>TOTAL</th>
+									<th className={styles.numCol}>RESOLVED</th>
+									<th className={styles.numCol}>ACTIVE</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -125,9 +125,9 @@ export default function MonthlyIncidentReport() {
 													{cat.name}
 												</div>
 											</td>
-											<td>{cat.total}</td>
-											<td>{cat.resolved}</td>
-											<td>{cat.active}</td>
+											<td className={styles.numCol}>{cat.total}</td>
+											<td className={styles.numCol}>{cat.resolved}</td>
+											<td className={styles.numCol}>{cat.active}</td>
 										</tr>
 									))
 								) : (

@@ -173,6 +173,11 @@ export default function MapView() {
 		});
 		mapRef.current = map;
 
+		// Safety: ensure the canvas is correctly sized after the layout settles.
+		const resizeFrame = window.requestAnimationFrame(() => map.resize());
+		const handleResize = () => map.resize();
+		window.addEventListener('resize', handleResize);
+
 		map.once('load', () => {
 			map.addSource('route-lines', {
 				type: 'geojson',
@@ -356,6 +361,8 @@ export default function MapView() {
 		});
 
 		return () => {
+			window.cancelAnimationFrame(resizeFrame);
+			window.removeEventListener('resize', handleResize);
 			mapRef.current = null;
 			map.remove();
 			setIsMapLoaded(false);
@@ -443,46 +450,58 @@ export default function MapView() {
 		: categories.map((category) => ({ name: category.name, color: CATEGORY_COLORS[category.id] }));
 
 	return (
-		<section className={`page-card ${styles.mapPage}`}>
+		<div className={styles.mapPage}>
 			<div className={styles.heading}>
 				<div><h1>Road network map</h1></div>
 				<span className={styles.resultCount}>{reports.length} reports</span>
 			</div>
 
-			<div className={styles.toolbar}>
-				<label className={styles.filterControl}>
-					<span>Category</span>
-					<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-						<option value="all">All Categories</option>
-						{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-					</select>
-				</label>
-				<label className={styles.filterControl}>
-					<span>Status</span>
-					<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-						<option value="all">All Statuses</option>
-						<option value="Open">Open</option>
-						<option value="Resolved">Resolved</option>
-					</select>
-				</label>
-				<label className={`${styles.filterControl} ${styles.hotspotToggle}`}>
-				<span>Hotspots</span>
+			<div className={styles.filterBar}>
+				<select
+					className={styles.filterSelect}
+					value={categoryFilter}
+					onChange={(event) => setCategoryFilter(event.target.value)}
+					aria-label="Filter by category"
+				>
+					<option value="all">All categories</option>
+					{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+				</select>
+				<select
+					className={styles.filterSelect}
+					value={statusFilter}
+					onChange={(event) => setStatusFilter(event.target.value)}
+					aria-label="Filter by status"
+				>
+					<option value="all">All statuses</option>
+					<option value="Open">Open</option>
+					<option value="Resolved">Resolved</option>
+				</select>
+				<div className={styles.pinToggle} role="group" aria-label="Color pins by">
+					<button
+						type="button"
+						className={`${styles.pinButton} ${colorMode === 'category' ? styles.pinButtonActive : ''}`}
+						aria-pressed={colorMode === 'category'}
+						onClick={() => setColorMode('category')}
+					>
+						Category
+					</button>
+					<button
+						type="button"
+						className={`${styles.pinButton} ${colorMode === 'status' ? styles.pinButtonActive : ''}`}
+						aria-pressed={colorMode === 'status'}
+						onClick={() => setColorMode('status')}
+					>
+						Status
+					</button>
+				</div>
 				<button
 					type="button"
-					className={styles.toggleButton}
+					className={`${styles.pillToggle} ${showHotspots ? styles.pillToggleActive : ''}`}
 					aria-pressed={showHotspots}
 					onClick={() => setShowHotspots((prev) => !prev)}
 				>
-					{showHotspots ? 'On' : 'Off'}
+					Hotspots: {showHotspots ? 'On' : 'Off'}
 				</button>
-			</label>
-			<fieldset className={styles.colorControl}>
-					<legend>Color pins by</legend>
-					<div className={styles.segmentedControl} role="group" aria-label="Color pins by">
-						<button type="button" aria-pressed={colorMode === 'category'} onClick={() => setColorMode('category')}>Category</button>
-						<button type="button" aria-pressed={colorMode === 'status'} onClick={() => setColorMode('status')}>Status</button>
-					</div>
-				</fieldset>
 			</div>
 
 			<div className={styles.legend} aria-label={`Pin colors by ${colorMode}`}>
@@ -532,6 +551,6 @@ export default function MapView() {
 					onThresholdChange={setProximityThreshold}
 					referenceLabel={referenceLabel}
 			/>
-		</section>
+		</div>
 	);
 }
