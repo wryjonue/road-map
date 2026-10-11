@@ -67,8 +67,9 @@ export default {
 				const auth = await getOptionalUser(request, env);
 				if (auth instanceof Response) return auth;
 				const month = url.searchParams.get('month');
+				const municipality = url.searchParams.get('municipality') || 'all';
 				if (!month) return Response.json({ error: 'Month parameter is required (YYYY-MM)' }, { status: 400 });
-				return getMonthlyReport(env, month);
+				return getMonthlyReport(env, month, municipality);
 			}
 			if (url.pathname === '/api/map/reports') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });

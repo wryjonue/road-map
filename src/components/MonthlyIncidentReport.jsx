@@ -1,38 +1,42 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/react';
-import { BarController, BarElement, CategoryScale, Chart, LinearScale, Tooltip } from 'chart.js';
 import styles from './MonthlyIncidentReport.module.css';
 
-Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
-
-const AREA_COLORS = ['#3b7587', '#bb594a', '#718a3e', '#b48228', '#725e8c', '#397158', '#bc7040', '#496894', '#707980'];
+const CATEGORY_COLORS = {
+	'Road Accident (Self)': '#f97316',
+	'Road Accident (Vehicular)': '#f97316',
+	'Damaged Road': '#eab308',
+	'Flooded Road': '#eab308',
+	'Road Construction': '#3b82f6',
+	'Roadworks': '#3b82f6',
+	'Road Closure': '#8b5cf6',
+	'Fallen Debris': '#8b5cf6',
+	'Heavy Traffic': '#64748b',
+	'Others': '#64748b',
+};
 
 function getMonthOptions() {
 	const options = [];
 	const now = new Date();
 	for (let i = 0; i < 12; i++) {
-		const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-		const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+		// Build the date in UTC so the formatted label and the YYYY-MM value
+		// never drift apart across timezones (a local midnight can be the
+		// previous month in UTC, which previously shifted labels back by one).
+		const date = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i, 1));
+		const value = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 		const label = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
 		options.push({ value, label });
 	}
 	return options;
 }
 
-function formatMonthLabel(month) {
-	const [year, mon] = month.split('-').map(Number);
-	const date = new Date(Date.UTC(year, mon - 1, 1));
-	return new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
-}
-
 export default function MonthlyIncidentReport() {
 	const { getToken, isLoaded, isSignedIn } = useAuth();
-	const chartCanvas = useRef(null);
-	const chartInstance = useRef(null);
 	const [selectedMonth, setSelectedMonth] = useState(() => {
 		const now = new Date();
 		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 	});
+	const [selectedMunicipality, setSelectedMunicipality] = useState('all');
 	const [data, setData] = useState(null);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState('');
@@ -47,7 +51,7 @@ export default function MonthlyIncidentReport() {
 			setData(null);
 			try {
 				const token = isSignedIn ? await getToken() : null;
-				const response = await fetch(`/api/dashboard/monthly-report?month=${encodeURIComponent(selectedMonth)}`, {
+				const response = await fetch(`/api/dashboard/monthly-report?month=${encodeURIComponent(selectedMonth)}&municipality=${encodeURIComponent(selectedMunicipality)}`, {
 					headers: token ? { Authorization: `Bearer ${token}` } : {},
 					signal: controller.signal,
 				});
@@ -62,87 +66,80 @@ export default function MonthlyIncidentReport() {
 		};
 		void loadReport();
 		return () => controller.abort();
-	}, [getToken, isLoaded, isSignedIn, selectedMonth]);
+	}, [getToken, isLoaded, isSignedIn, selectedMonth, selectedMunicipality]);
 
-	useEffect(() => {
-		if (!chartCanvas.current || !data) return undefined;
-		chartInstance.current?.destroy();
-		const municipalities = Array.isArray(data.byMunicipality) ? data.byMunicipality : [];
-		chartInstance.current = new Chart(chartCanvas.current, {
-			type: 'bar',
-			data: {
-				labels: municipalities.map((item) => item.municipality),
-				datasets: [{
-					label: 'Incidents',
-					data: municipalities.map((item) => item.count),
-					backgroundColor: AREA_COLORS.slice(0, municipalities.length),
-					borderWidth: 0,
-					barThickness: 22,
-				}],
-			},
-			options: {
-				indexAxis: 'y',
-				maintainAspectRatio: false,
-				responsive: true,
-				plugins: {
-					legend: { display: false },
-					tooltip: { displayColors: false, callbacks: { label: (context) => ` ${context.parsed.x} incidents` } },
-				},
-				scales: {
-					x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e4e4e4' } },
-					y: { grid: { display: false }, ticks: { autoSkip: false, color: '#343434' } },
-				},
-			},
-		});
-		return () => {
-			chartInstance.current?.destroy();
-			chartInstance.current = null;
-		};
-	}, [data]);
+	const municipalities = data?.byMunicipality ?? [];
 
 	return (
 		<section className={styles.section} aria-labelledby="monthly-report-heading">
-			<div className={styles.sectionHeader}>
-				<h2 id="monthly-report-heading">Monthly Incident Report</h2>
-				<label className={styles.monthControl}>
-					<span>Month</span>
-					<select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
-						{monthOptions.map((option) => (
-							<option key={option.value} value={option.value}>{option.label}</option>
-						))}
-					</select>
-				</label>
-			</div>
-
-			{error && <p className={styles.error} role="alert">{error}</p>}
-			{isLoading && <p className={styles.state} role="status">Loading monthly report...</p>}
-
-			{!isLoading && !error && data && (
-				<>
-					<div className={styles.metricsGrid}>
-						<div className={styles.metricCard}>
-							<span>Total Incidents</span>
-							<strong>{data.total.toLocaleString()}</strong>
-						</div>
-						<div className={styles.metricCard}>
-							<span>Resolved</span>
-							<strong>{data.resolved.toLocaleString()}</strong>
-						</div>
-						<div className={`${styles.metricCard} ${styles.unresolved}`}>
-							<span>Unresolved</span>
-							<strong>{data.unresolved.toLocaleString()}</strong>
-						</div>
+			<div className={styles.card}>
+				<div className={styles.sectionHeader}>
+					<div>
+						<h2 id="monthly-report-heading" className={styles.title}>Monthly incident report</h2>
+						<p className={styles.subtitle}>Reported, resolved, and still on our radar.</p>
 					</div>
+					<div className={styles.filters}>
+						<select 
+							className={styles.filterSelect}
+							value={selectedMonth} 
+							onChange={(event) => setSelectedMonth(event.target.value)}
+						>
+							{monthOptions.map((option) => (
+								<option key={option.value} value={option.value}>{option.label}</option>
+							))}
+						</select>
+						<select 
+							className={styles.filterSelect}
+							value={selectedMunicipality}
+							onChange={(event) => setSelectedMunicipality(event.target.value)}
+						>
+							<option value="all">All municipalities</option>
+							{municipalities.map((m) => (
+								<option key={m.municipality} value={m.municipality}>{m.municipality}</option>
+							))}
+						</select>
+					</div>
+				</div>
 
-					{(data.byMunicipality ?? []).length > 0 ? (
-						<div className={styles.chartFrame}>
-							<canvas ref={chartCanvas} role="img" aria-label={`Horizontal bar chart of incidents by municipality for ${formatMonthLabel(selectedMonth)}`} />
-						</div>
-					) : (
-						<p className={styles.emptyState}>No incidents recorded for {formatMonthLabel(selectedMonth)}.</p>
-					)}
-				</>
-			)}
+				{error && <p className={styles.error} role="alert">{error}</p>}
+				{isLoading && <p className={styles.state} role="status">Loading monthly report...</p>}
+
+				{!isLoading && !error && data && (
+					<div className={styles.tableContainer}>
+						<table className={styles.reportTable}>
+							<thead>
+								<tr>
+									<th>CATEGORY</th>
+									<th>TOTAL</th>
+									<th>RESOLVED</th>
+									<th>ACTIVE</th>
+								</tr>
+							</thead>
+							<tbody>
+								{(data.byCategory ?? []).length > 0 ? (
+									data.byCategory.map((cat) => (
+										<tr key={cat.name}>
+											<td>
+												<div className={styles.categoryCell}>
+													<span className={styles.dot} style={{ backgroundColor: CATEGORY_COLORS[cat.name] || '#64748b' }} />
+													{cat.name}
+												</div>
+											</td>
+											<td>{cat.total}</td>
+											<td>{cat.resolved}</td>
+											<td>{cat.active}</td>
+										</tr>
+									))
+								) : (
+									<tr>
+										<td colSpan={4} className={styles.emptyState}>No incidents recorded for this period.</td>
+									</tr>
+								)}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</div>
 		</section>
 	);
 }

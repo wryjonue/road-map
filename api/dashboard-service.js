@@ -27,23 +27,42 @@ export async function getDashboardMetrics(env) {
 	return Response.json({ total, resolved, resolvedPercentage, categories, dailyReports }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
-export async function getMonthlyReport(env, month) {
+export async function getMonthlyReport(env, month, municipality) {
 	if (!/^\d{4}-\d{2}$/.test(month)) return Response.json({ error: 'Month must be in YYYY-MM format' }, { status: 400 });
-	// created_at is stored as local time strings (e.g. '2026-05-18 08:30:00') without timezone.
-	// Compare using simple string prefixes that match the stored format.
 	const [year, mon] = month.split('-').map(Number);
 	const nextMonth = mon === 12 ? 1 : mon + 1;
 	const nextYear = mon === 12 ? year + 1 : year;
 	const start = `${month}-01`;
 	const end = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+
+	let muniFilter = '';
+	const params = [start, end];
+	if (municipality && municipality !== 'all') {
+		muniFilter = 'AND city = ?';
+		params.push(municipality);
+	}
+
 	const { results: summaryRows } = await env.road_map_db.prepare(`
 		SELECT COUNT(*) AS total,
 			COALESCE(SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END), 0) AS resolved,
 			COALESCE(SUM(CASE WHEN status != 'Resolved' THEN 1 ELSE 0 END), 0) AS unresolved
 		FROM reports
-		WHERE deleted_at IS NULL AND created_at >= ? AND created_at < ?
-	`).bind(start, end).all();
+		WHERE deleted_at IS NULL AND created_at >= ? AND created_at < ? ${muniFilter}
+	`).bind(...params).all();
 	const summary = summaryRows[0] || { total: 0, resolved: 0, unresolved: 0 };
+
+	const { results: categoryRows } = await env.road_map_db.prepare(`
+		SELECT c.name AS category_name,
+			COUNT(r.id) AS total,
+			COALESCE(SUM(CASE WHEN r.status = 'Resolved' THEN 1 ELSE 0 END), 0) AS resolved,
+			COALESCE(SUM(CASE WHEN r.status != 'Resolved' THEN 1 ELSE 0 END), 0) AS active
+		FROM categories c
+		LEFT JOIN reports r ON r.category_id = c.id AND r.deleted_at IS NULL AND r.created_at >= ? AND r.created_at < ? ${muniFilter.replace('AND city', 'AND r.city')}
+		GROUP BY c.id, c.name
+		HAVING total > 0
+		ORDER BY total DESC
+	`).bind(...params).all();
+
 	const { results: locationRows } = await env.road_map_db.prepare(`
 		SELECT COALESCE(NULLIF(city, ''), 'Unknown municipality') AS municipality,
 			COUNT(*) AS count
@@ -52,11 +71,13 @@ export async function getMonthlyReport(env, month) {
 		GROUP BY municipality
 		ORDER BY count DESC
 	`).bind(start, end).all();
+
 	return Response.json({
 		month,
 		total: Number(summary.total) || 0,
 		resolved: Number(summary.resolved) || 0,
 		unresolved: Number(summary.unresolved) || 0,
+		byCategory: categoryRows.map((row) => ({ name: row.category_name, total: Number(row.total) || 0, resolved: Number(row.resolved) || 0, active: Number(row.active) || 0 })),
 		byMunicipality: locationRows.map((row) => ({ municipality: row.municipality, count: Number(row.count) || 0 })),
 	}, { headers: { 'Cache-Control': 'no-store' } });
 }

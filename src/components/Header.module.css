@@ -65,6 +65,14 @@
 	letter-spacing: -0.02em;
 }
 
+.mobileTitle {
+	display: none;
+}
+
+.desktopTitle {
+	display: inline;
+}
+
 .rightSection {
 	display: flex;
 	align-items: center;
@@ -144,6 +152,14 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		margin: 0;
+	}
+
+	.mobileTitle {
+		display: inline;
+	}
+
+	.desktopTitle {
+		display: none;
 	}
 
 	.rightSection {

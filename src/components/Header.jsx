@@ -73,7 +73,7 @@ export default function Header({ onMenuClick }) {
 					<span className={styles.breadcrumbSeparator}>/</span>
 					<span className={styles.breadcrumbPage}>{getPageTitle().toUpperCase()}</span>
 				</div>
-				<h1 className={styles.pageTitle}>{getPageTitle()}</h1>
+				<h1 className={styles.pageTitle}><span className={styles.desktopTitle}>{getPageTitle()}</span><span className={styles.mobileTitle}>RoadMap</span></h1>
 			</div>
 			<div className={styles.rightSection} ref={authContainerRef}>
 				<div className={styles.dateDisplay}>

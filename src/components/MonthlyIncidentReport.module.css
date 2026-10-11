@@ -1,124 +1,142 @@
 .section {
 	display: grid;
-	gap: 16px;
-	padding-top: 18px;
-	border-top: 1px solid var(--border);
+	gap: 20px;
+}
+
+.card {
+	background: var(--surface);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+	border: 1px solid var(--border-light);
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
 }
 
 .sectionHeader {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	justify-content: space-between;
-	gap: 12px;
+	gap: 16px;
 	flex-wrap: wrap;
 }
 
-.sectionHeader h2 {
-	margin: 0;
-	font-size: 1.15rem;
-}
-
-.monthControl {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.monthControl span {
-	font-size: .76rem;
-	font-weight: 700;
-	color: var(--muted);
-	white-space: nowrap;
-}
-
-.monthControl select {
-	min-height: 34px;
-	padding: 4px 28px 4px 8px;
-	border: 2px solid var(--border);
-	background: var(--surface);
+.title {
+	margin: 0 0 4px 0;
+	font-size: 1.125rem;
+	font-weight: 600;
 	color: var(--text);
-	font-size: .82rem;
 }
 
-.monthControl select:focus-visible {
-	outline: 3px solid var(--primary);
-	outline-offset: 2px;
+.subtitle {
+	margin: 0;
+	font-size: 0.875rem;
+	color: var(--text-muted);
 }
 
-.metricsGrid {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
+.filters {
+	display: flex;
 	gap: 12px;
 }
 
-.metricCard {
+.filterSelect {
+	padding: 8px 32px 8px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
 	background: var(--surface);
-	border: 2px solid var(--border);
-	padding: 14px 16px;
-	display: grid;
-	gap: 4px;
+	color: var(--text);
+	font-size: 0.875rem;
+	font-weight: 500;
+	cursor: pointer;
+	appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 8px center;
+	background-size: 16px;
 }
 
-.metricCard span {
-	color: var(--muted);
-	font-size: .78rem;
-	font-weight: 700;
+.filterSelect:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
 }
 
-.metricCard strong {
-	font-size: 1.6rem;
-	color: var(--primary);
+.tableContainer {
+	overflow-x: auto;
 }
 
-.metricCard.unresolved strong {
-	color: var(--danger);
-}
-
-.chartFrame {
-	position: relative;
+.reportTable {
 	width: 100%;
-	min-width: 0;
-	height: 320px;
-	overflow: hidden;
+	border-collapse: collapse;
+	text-align: left;
 }
 
-.chartFrame canvas {
-	max-width: 100%;
+.reportTable th {
+	padding: 12px 16px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	border-bottom: 1px solid var(--border-light);
+	background: var(--bg-app);
+}
+
+.reportTable td {
+	padding: 16px;
+	font-size: 0.875rem;
+	color: var(--text);
+	border-bottom: 1px solid var(--border-light);
+}
+
+.reportTable tr:last-child td {
+	border-bottom: none;
+}
+
+.categoryCell {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-weight: 500;
+}
+
+.dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
 }
 
 .state,
 .emptyState,
 .error {
 	margin: 0;
-	color: var(--muted);
-	font-size: .88rem;
+	color: var(--text-muted);
+	font-size: 0.875rem;
+	text-align: center;
+	padding: 20px;
 }
 
 .error {
-	padding: 10px 12px;
-	border-left: 4px solid var(--danger);
-	background: rgba(192, 57, 43, .08);
+	text-align: left;
+	padding: 12px 16px;
+	border-radius: var(--radius-sm);
+	background: rgba(239, 68, 68, 0.1);
 	color: var(--danger);
+	border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
 	.sectionHeader {
-		align-items: flex-start;
+		flex-direction: column;
 	}
-
-	.monthControl {
+	
+	.filters {
 		width: 100%;
+		flex-direction: column;
 	}
-
-	.monthControl select {
-		flex: 1;
-	}
-
-	.metricsGrid {
-		grid-template-columns: 1fr;
-	}
-
-	.chartFrame {
-		height: 360px;
+	
+	.filterSelect {
+		width: 100%;
 	}
 }
