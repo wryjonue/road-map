@@ -2,6 +2,7 @@ import { approveReport, createReport, deletePendingReport, getHotspots, getMapRe
 import { getArchivedReports, getDashboardMetrics, getMonthlyReport, getPendingReports } from './dashboard-service.js';
 import { getCalculatedRoute, getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
+import { chatWithGemini, MAX_MESSAGE_LENGTH } from './ai-service.js';
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
 import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from './notification-service.js';
 
@@ -36,6 +37,18 @@ export default {
 				const roomId = decodeURIComponent(chatMatch[1]);
 				const stub = env.CHAT_ROOM.getByName(`room:${roomId}`);
 				return stub.fetch(request);
+			}
+			if (url.pathname === '/api/ai/chat') {
+				if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				let body;
+				try { body = await request.json(); } catch { return Response.json({ error: 'Request body must be valid JSON' }, { status: 400 }); }
+				const message = typeof body?.message === 'string' ? body.message.trim() : '';
+				if (!message) return Response.json({ error: 'message is required' }, { status: 400 });
+				if (message.length > MAX_MESSAGE_LENGTH) return Response.json({ error: `message must be ${MAX_MESSAGE_LENGTH} characters or fewer` }, { status: 400 });
+				const result = await chatWithGemini(env, message);
+				return Response.json(result, { headers: { 'Cache-Control': 'no-store' } });
 			}
 			if (url.pathname === '/api/location/resolve') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
