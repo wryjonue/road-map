@@ -27,6 +27,32 @@ export async function getDashboardMetrics(env) {
 	return Response.json({ total, resolved, resolvedPercentage, categories, dailyReports }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
+export async function getPendingReports(env, auth, limit = 10) {
+	const role = auth?.role;
+	if (role !== 'authority' && role !== 'admin') {
+		return Response.json({ error: 'Forbidden' }, { status: 403 });
+	}
+	const safeLimit = Math.min(Math.max(Number.isInteger(limit) ? limit : 10, 1), 20);
+	const { results } = await env.road_map_db.prepare(`
+		SELECT r.id, r.title, r.description, r.author_name, r.status,
+			r.barangay, r.city, r.province, r.resolved_address,
+			c.id AS category_id, c.name AS category_name
+		FROM reports r JOIN categories c ON c.id = r.category_id
+		WHERE r.deleted_at IS NULL AND r.status = 'Pending'
+		ORDER BY r.created_at DESC, r.id DESC
+		LIMIT ?
+	`).bind(safeLimit).all();
+	const reports = results.map((row) => ({
+		id: row.id,
+		title: row.title,
+		description: row.description,
+		poster: row.author_name || 'Community reporter',
+		category: { id: row.category_id, name: row.category_name },
+		location: { barangay: row.barangay, city: row.city, province: row.province, resolvedAddress: row.resolved_address },
+	}));
+	return Response.json({ reports }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
 export async function getMonthlyReport(env, month, municipality) {
 	if (!/^\d{4}-\d{2}$/.test(month)) return Response.json({ error: 'Month must be in YYYY-MM format' }, { status: 400 });
 	const [year, mon] = month.split('-').map(Number);

@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { BarController, BarElement, CategoryScale, Chart, Filler, LineController, LineElement, LinearScale, PointElement, Tooltip } from 'chart.js';
 import MonthlyIncidentReport from '../components/MonthlyIncidentReport';
+import PendingReportsTable from '../components/PendingReportsTable';
+import { useAppRole, canManageReports } from '../auth/roles';
+import { buildDashboardCsv, downloadCsv, exportFilename } from '../utils/exportCsv';
 import styles from './Dashboard.module.css';
 
 Chart.register(BarController, BarElement, CategoryScale, Filler, LineController, LineElement, LinearScale, PointElement, Tooltip);
@@ -12,11 +15,14 @@ const CATEGORY_COLORS = ['#f97316', '#eab308', '#3b82f6', '#8b5cf6', '#10b981', 
 
 export default function Dashboard() {
 	const { getToken, isLoaded, isSignedIn } = useAuth();
+	const { isLoaded: roleLoaded, role } = useAppRole();
+	const canManage = roleLoaded && canManageReports(role);
 	const chartCanvas = useRef(null);
 	const dailyChartCanvas = useRef(null);
 	const [metrics, setMetrics] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState('');
+	const [monthlySnapshot, setMonthlySnapshot] = useState(null);
 
 	useEffect(() => {
 		if (!isLoaded) return undefined;
@@ -175,12 +181,35 @@ export default function Dashboard() {
 	const resolvedTrend = '+20.0%';
 	const rateTrend = '+5.0 pts';
 
+	const handleExport = () => {
+		const csv = buildDashboardCsv({
+			metrics,
+			monthly: monthlySnapshot,
+			monthLabel: currentMonthLabel,
+			year: now.getFullYear(),
+			exportedAt: new Date().toLocaleString(),
+		});
+		downloadCsv(exportFilename(now), csv);
+	};
+
 	return (
 		<div className={styles.dashboardContainer}>
 			{/* Overview Header */}
 			<div className={styles.overviewHeader}>
 				<h2 className={styles.overviewTitle}>{currentMonthLabel} overview</h2>
-				<span className={styles.activeBadge}>{activeReports} active reports</span>
+				<div className={styles.overviewActions}>
+					<span className={styles.activeBadge}>{activeReports} active reports</span>
+					<button
+						type="button"
+						className={`secondary-btn ${styles.exportBtn}`}
+						onClick={handleExport}
+						disabled={!metrics}
+						aria-label="Export dashboard data as CSV"
+					>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+						Export CSV
+					</button>
+				</div>
 			</div>
 
 			{error && <p className={styles.error} role="alert">{error}</p>}
@@ -262,9 +291,16 @@ export default function Dashboard() {
 				</section>
 			</div>
 
+			{/* Pending review (managers only) */}
+			{canManage && (
+				<div className={styles.reportSection}>
+					<PendingReportsTable />
+				</div>
+			)}
+
 			{/* Monthly Incident Report */}
 			<div className={styles.reportSection}>
-				<MonthlyIncidentReport />
+				<MonthlyIncidentReport onSnapshotChange={setMonthlySnapshot} />
 			</div>
 		</div>
 	);

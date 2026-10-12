@@ -30,7 +30,7 @@ function getMonthOptions() {
 	return options;
 }
 
-export default function MonthlyIncidentReport() {
+export default function MonthlyIncidentReport({ onSnapshotChange } = {}) {
 	const { getToken, isLoaded, isSignedIn } = useAuth();
 	const [selectedMonth, setSelectedMonth] = useState(() => {
 		const now = new Date();
@@ -69,6 +69,11 @@ export default function MonthlyIncidentReport() {
 	}, [getToken, isLoaded, isSignedIn, selectedMonth, selectedMunicipality]);
 
 	const municipalities = data?.byMunicipality ?? [];
+
+	useEffect(() => {
+		if (!onSnapshotChange) return;
+		onSnapshotChange({ month: selectedMonth, municipality: selectedMunicipality, data });
+	}, [onSnapshotChange, selectedMonth, selectedMunicipality, data]);
 
 	return (
 		<section className={styles.section} aria-labelledby="monthly-report-heading">

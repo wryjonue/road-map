@@ -7,6 +7,18 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { canManageReports, useAppRole } from '../auth/roles';
 import styles from './ViewReportPage.module.css';
 
+const CATEGORY_COLORS = {
+	1: '#c65d2e',
+	2: '#bd3e50',
+	3: '#8b6aad',
+	4: '#27829a',
+	5: '#607d35',
+	6: '#c28a22',
+	7: '#376fa3',
+	8: '#aa4776',
+	9: '#5f6972',
+};
+
 function AuthenticatedMediaImage({ src, alt, className }) {
 	const { getToken, isLoaded } = useAuth();
 	const [objectUrl, setObjectUrl] = useState('');
@@ -64,7 +76,10 @@ export default function ViewReportPage() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState('');
 	const [isMutating, setIsMutating] = useState(false);
+	const [menuOpen, setMenuOpen] = useState(false);
 	const userLocationRef = useRef(null);
+	const dropdownRef = useRef(null);
+	const menuItemsRef = useRef([]);
 
 	const canManage = canManageReports(role);
 	const canDelete = canManage || (report && report.authorId === user?.id);
@@ -110,6 +125,11 @@ export default function ViewReportPage() {
 		});
 		mapRef.current = map;
 
+		// Safety: ensure the canvas is sized correctly after the card layout settles.
+		const resizeFrame = window.requestAnimationFrame(() => map.resize());
+		const handleResize = () => map.resize();
+		window.addEventListener('resize', handleResize);
+
 		map.once('load', () => {
 			if (hasRoute && report.routePolyline) {
 				try {
@@ -141,6 +161,8 @@ export default function ViewReportPage() {
 		});
 
 		return () => {
+			window.cancelAnimationFrame(resizeFrame);
+			window.removeEventListener('resize', handleResize);
 			mapRef.current = null;
 			map.remove();
 		};
@@ -163,6 +185,46 @@ export default function ViewReportPage() {
 		);
 		return () => { cancelled = true; };
 	}, []);
+
+	// Close the status menu on outside click.
+	useEffect(() => {
+		if (!menuOpen) return undefined;
+		const handlePointerDown = (event) => {
+			if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setMenuOpen(false);
+		};
+		document.addEventListener('mousedown', handlePointerDown);
+		return () => document.removeEventListener('mousedown', handlePointerDown);
+	}, [menuOpen]);
+
+	// Close the menu when the report/status changes or an action starts.
+	useEffect(() => { setMenuOpen(false); }, [report?.status, isMutating]);
+
+	const handleMenuKeyDown = (event, index, itemCount) => {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			setMenuOpen(false);
+		} else if (event.key === 'ArrowDown') {
+			event.preventDefault();
+			const next = (index + 1) % itemCount;
+			menuItemsRef.current[next]?.focus();
+		} else if (event.key === 'ArrowUp') {
+			event.preventDefault();
+			const prev = (index - 1 + itemCount) % itemCount;
+			menuItemsRef.current[prev]?.focus();
+		} else if (event.key === 'Home') {
+			event.preventDefault();
+			menuItemsRef.current[0]?.focus();
+		} else if (event.key === 'End') {
+			event.preventDefault();
+			menuItemsRef.current[itemCount - 1]?.focus();
+		}
+	};
+
+	const runAction = (option) => {
+		setMenuOpen(false);
+		if (option.value === 'Delete') void deleteReport();
+		else void updateStatus(option.value);
+	};
 
 	const updateStatus = async (nextStatus) => {
 		if (!canManage || isMutating) return;
@@ -207,72 +269,153 @@ export default function ViewReportPage() {
 		}
 	};
 
-	if (isLoading) return <section className={`page-card ${styles.page}`}><p className={styles.state}>Loading report...</p></section>;
-	if (error && !report) return <section className={`page-card ${styles.page}`}><p className={styles.error} role="alert">{error}</p><button type="button" className="primary-btn" onClick={() => navigate('/feed')}>Back to Feed</button></section>;
+	if (isLoading) return <div className={styles.page}><p className={styles.state}>Loading report...</p></div>;
+	if (error && !report) {
+		return (
+			<div className={styles.page}>
+				<div className={styles.stateActions}>
+					<p className={styles.error} role="alert">{error}</p>
+					<button type="button" className="primary-btn" onClick={() => navigate('/feed')}>Back to reports</button>
+				</div>
+			</div>
+		);
+	}
 	if (!report) return null;
 
-	const statusClass = `status-badge status-${report.status.toLowerCase()}`;
 	const reportImageUrl = report.images?.[0]?.url || report.imageUrl;
+	const statusKey = report.status.toLowerCase();
+	const locationText = report.location.resolvedAddress || [report.location.barangay, report.location.city, report.location.province].filter(Boolean).join(', ') || 'Location unavailable';
 
-	const statusOptions = canManage && report.status === 'Pending'
-		? [{ label: 'Approve Report', value: 'Open' }, { label: 'Deny Report', value: 'Rejected' }]
-		: canManage && report.status === 'Open'
-			? [{ label: 'Resolve report', value: 'Resolved' }]
-			: [];
-	if (canDelete && (report.status === 'Pending' || report.status === 'Open')) {
-		statusOptions.push({ label: 'Delete', value: 'Delete' });
+	const statusActions = [];
+	if (canManage && report.status === 'Pending') {
+		statusActions.push({ label: 'Approve report', value: 'Open', kind: 'approve', icon: 'check' });
+		statusActions.push({ label: 'Deny report', value: 'Rejected', kind: 'deny', icon: 'x' });
 	}
+	if (canManage && report.status === 'Open') {
+		statusActions.push({ label: 'Resolve report', value: 'Resolved', kind: 'resolve', icon: 'check' });
+	}
+	if (canDelete && (report.status === 'Pending' || report.status === 'Open')) {
+		statusActions.push({ label: 'Delete report', value: 'Delete', kind: 'delete', icon: 'trash' });
+	}
+	const hasActions = statusActions.length > 0;
+
+	const ActionIcon = ({ name }) => {
+		if (name === 'check') return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>;
+		if (name === 'x') return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
+		if (name === 'trash') return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>;
+		return null;
+	};
 
 	return (
-		<section className={`page-card ${styles.page}`}>
+		<div className={styles.page}>
 			{error && report && <p className={styles.error} role="alert">{error}</p>}
-			<div className={styles.header}>
-				<button type="button" className="ghost-btn" onClick={() => navigate('/feed')}>← Back to Feed</button>
-				<div className={styles.headerActions}>
-					{(canManage || canDelete) && statusOptions.length > 0
-						? <select
-							className={statusClass}
-							value={report.status}
-							onChange={(event) => event.target.value === 'Delete' ? deleteReport() : updateStatus(event.target.value)}
-							disabled={isMutating}
-							aria-label={`Change report status from ${report.status}`}
-						>
-							<option value={report.status}>{isMutating ? 'Updating...' : report.status}</option>
-							{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-						</select>
-						: <span className={statusClass}>{report.status}</span>}
+
+			{/* Top bar */}
+			<div className={styles.topBar}>
+				<button type="button" className={`ghost-btn ${styles.backButton}`} onClick={() => navigate('/feed')} aria-label="Back to community reports">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+					Back to reports
+				</button>
+				<div className={styles.statusArea}>
+					{hasActions ? (
+						<div className={`${styles.dropdown} ${menuOpen ? styles.dropdownOpen : ''}`} ref={dropdownRef}>
+							<button
+								type="button"
+								className={styles.dropdownTrigger}
+								aria-haspopup="menu"
+								aria-expanded={menuOpen}
+								aria-controls="status-menu"
+								disabled={isMutating}
+								onClick={() => setMenuOpen((open) => !open)}
+								onKeyDown={(event) => {
+									if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+										event.preventDefault();
+										setMenuOpen(true);
+										window.requestAnimationFrame(() => menuItemsRef.current[0]?.focus());
+									}
+								}}
+							>
+								{isMutating ? <span className={styles.spinner} aria-hidden="true" /> : <span className={`${styles.triggerDot} ${styles[statusKey]}`} aria-hidden="true" />}
+								{isMutating ? 'Updating…' : report.status}
+								<svg className={styles.chevron} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+							</button>
+							{menuOpen && (
+								<div id="status-menu" className={styles.dropdownMenu} role="menu" aria-label="Report actions">
+									{statusActions.map((option, index) => (
+										<button
+											key={option.value}
+											type="button"
+											role="menuitem"
+											className={`${styles.menuItem} ${styles[option.kind]}`}
+											ref={(el) => { menuItemsRef.current[index] = el; }}
+											disabled={isMutating}
+											onClick={() => runAction(option)}
+											onKeyDown={(event) => {
+												if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); runAction(option); }
+												else handleMenuKeyDown(event, index, statusActions.length);
+											}}
+										>
+											<ActionIcon name={option.icon} />
+											{option.label}
+										</button>
+									))}
+								</div>
+							)}
+						</div>
+					) : (
+						<span className={`${styles.statusPill} ${styles[statusKey]}`}>{report.status}</span>
+					)}
 				</div>
 			</div>
 
+			{/* Two-column content */}
 			<div className={styles.content}>
-				<div className={styles.details}>
-					<h1>{report.title}</h1>
-					<div className={styles.meta}>
-						<span>{report.authorName || 'Community reporter'}</span>
-						<span>·</span>
-						<span>{new Date(report.createdAt).toLocaleString()}</span>
-						<span>·</span>
-						<span>{report.category.name}</span>
+				<div className={styles.leftColumn}>
+					<div className={`${styles.card} ${styles.detailsCard}`}>
+						<div className={styles.badgeRow}>
+							<span className={styles.categoryPill} style={{ '--category-color': CATEGORY_COLORS[report.category?.id] || '#5f6972' }}>{report.category?.name || 'Uncategorized'}</span>
+							<span className={`${styles.statusPill} ${styles[statusKey]}`}>{report.status}</span>
+						</div>
+						<h1 className={styles.title}>{report.title}</h1>
+						<div className={styles.meta}>
+							<span>{report.authorName || 'Community reporter'}</span>
+							<span className={styles.metaSep}>·</span>
+							<span>{new Date(report.createdAt).toLocaleString()}</span>
+						</div>
+						<p className={styles.description}>{report.description}</p>
 					</div>
-					<p className={styles.description}>{report.description}</p>
-					{reportImageUrl && <div className={styles.imageWrap}><ReportMediaImage className={styles.reportImage} src={reportImageUrl} alt="Incident report" /></div>}
-					<div className={styles.locationInfo}>
-						<strong>Location</strong>
-						<span>{report.location.resolvedAddress || [report.location.barangay, report.location.city, report.location.province].filter(Boolean).join(', ')}</span>
+
+					{reportImageUrl && (
+						<div className={`${styles.card} ${styles.mediaCard}`}>
+							<div className={styles.imageWrap}>
+								<ReportMediaImage className={styles.reportImage} src={reportImageUrl} alt="Incident report" />
+							</div>
+						</div>
+					)}
+
+					<div className={`${styles.card} ${styles.locationCard}`}>
+						<svg className={styles.locationIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+						<div className={styles.locationText}>
+							<span className={styles.locationLabel}>Location</span>
+							<span className={styles.locationValue}>{locationText}</span>
+						</div>
 					</div>
 				</div>
 
 				<div className={styles.mapSection}>
-					<div ref={mapContainer} className={styles.mapCanvas} aria-label="Map of incident location" />
+					<div className={`${styles.card} ${styles.mapCard}`}>
+						<div ref={mapContainer} className={styles.mapCanvas} aria-label="Map of incident location" />
+					</div>
 				</div>
 			</div>
 
-			<section className={styles.commentsSection} aria-labelledby="comments-heading">
+			{/* Comments */}
+			<div className={`${styles.card} ${styles.commentsCard}`} aria-labelledby="comments-heading">
 				<h2 id="comments-heading">Comments ({report.commentCount})</h2>
 				<div className={styles.commentsPlaceholder}>
 					<p>Comments feature coming soon.</p>
 				</div>
-			</section>
-		</section>
+			</div>
+		</div>
 	);
 }

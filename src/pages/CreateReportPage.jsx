@@ -213,6 +213,15 @@ export default function CreateReportPage() {
 
 	return (
 		<section className={`page-card ${styles.page}`}>
+			<button
+				type="button"
+				className={`ghost-btn ${styles.backButton}`}
+				onClick={() => navigate('/feed')}
+				aria-label="Back to community reports"
+			>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+				Back to reports
+			</button>
 			<div className={styles.heading}><div><h1>Create Incident Report</h1></div></div>
 			<form className={styles.form} onSubmit={handleSubmit}>
 				<div className={styles.fields}>
