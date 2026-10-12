@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/react';
 import { BarController, BarElement, CategoryScale, Chart, Filler, LineController, LineElement, LinearScale, PointElement, Tooltip } from 'chart.js';
 import MonthlyIncidentReport from '../components/MonthlyIncidentReport';
 import PendingReportsTable from '../components/PendingReportsTable';
+import ArchivedReportsTable from '../components/ArchivedReportsTable';
 import { useAppRole, canManageReports } from '../auth/roles';
 import { buildDashboardCsv, downloadCsv, exportFilename } from '../utils/exportCsv';
 import styles from './Dashboard.module.css';
@@ -295,6 +296,13 @@ export default function Dashboard() {
 			{canManage && (
 				<div className={styles.reportSection}>
 					<PendingReportsTable />
+				</div>
+			)}
+
+			{/* Recently archived (managers only) */}
+			{canManage && (
+				<div className={styles.reportSection}>
+					<ArchivedReportsTable />
 				</div>
 			)}
 

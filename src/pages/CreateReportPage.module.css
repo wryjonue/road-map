@@ -1,6 +1,17 @@
 .page {
     display: grid;
     gap: 24px;
+    min-width: 0;
+}
+
+/* Shared floating card style */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 24px;
+    min-width: 0;
 }
 
 .backButton {
@@ -18,14 +29,17 @@
 
 .heading h1 {
     margin: 0;
-    font-size: 2.75rem;
-    line-height: 1.05;
+    font-size: 2rem;
+    line-height: 1.2;
+    font-weight: 700;
+    color: var(--text);
 }
 
 .heading p:last-child {
-    margin: 12px 0 0;
-    color: var(--muted);
+    margin: 8px 0 0;
+    color: var(--text-muted);
     line-height: 1.6;
+    font-size: 0.95rem;
 }
 
 .form {
@@ -33,10 +47,16 @@
     gap: 24px;
 }
 
+/* Details Card Internals */
+.detailsCard {
+    display: grid;
+    gap: 20px;
+}
+
 .fields {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
+    gap: 20px;
 }
 
 .field {
@@ -44,28 +64,55 @@
     gap: 8px;
     color: var(--text);
     font-weight: 600;
+    font-size: 0.9rem;
 }
 
 .field span {
-    color: var(--muted);
-    font-size: .88rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
 }
 
 .field input,
 .field select,
 .field textarea {
     width: 100%;
-    border: 2px solid var(--border);
-    border-radius: 3px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text);
-    padding: 12px 14px;
+    padding: 10px 14px;
     outline: none;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.field input[type="file"] {
+    padding: 8px;
+    background: var(--bg-app);
+    border: 1px dashed var(--border);
+    cursor: pointer;
+}
+
+.field input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.field input[type="file"]::file-selector-button:hover {
+    background: var(--bg-app);
 }
 
 .field textarea {
     resize: vertical;
-    min-height: 130px;
+    min-height: 120px;
     line-height: 1.5;
 }
 
@@ -79,58 +126,69 @@
 .fullWidth {
     grid-column: 1 / -1;
 }
+
 button:disabled {
-    background-color: gray;
+    opacity: 0.6;
     cursor: not-allowed;
 }
+
 .preview {
     width: min(240px, 100%);
     max-height: 180px;
     object-fit: cover;
-    border-radius: 3px;
-    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-light);
+    margin-top: 8px;
 }
 
-.locationSection {
+/* Location Card Internals */
+.locationCard {
     display: grid;
-    gap: 14px;
+    gap: 20px;
 }
 
 .locationHeading {
     display: flex;
     justify-content: space-between;
-    align-items: end;
+    align-items: flex-end;
     gap: 16px;
 }
 
 .locationHeading h2 {
     margin: 0;
-    font-size: 1.35rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text);
 }
 
 .locationHeading p {
     margin: 6px 0 0;
-    color: var(--muted);
+    color: var(--text-muted);
+    font-size: 0.9rem;
 }
 
 .loading {
-    color: var(--warning);
-    font-size: .9rem;
+    color: var(--primary);
+    font-size: 0.85rem;
     font-weight: 600;
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .mapWrap {
     position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
 }
 
 .map {
     width: 100%;
-    height: 440px;
-    border: 2px solid var(--border);
-    border-radius: 3px;
-    overflow: hidden;
-    background: var(--bg-strong);
+    height: 400px;
+    background: var(--bg-app);
 }
 
 .resolvingOverlay {
@@ -141,11 +199,11 @@ button:disabled {
     align-items: center;
     justify-content: center;
     gap: 10px;
-    background: rgba(0, 0, 0, .45);
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(2px);
     color: #ffffff;
-    font-weight: 700;
-    font-size: .95rem;
-    border-radius: 3px;
+    font-weight: 600;
+    font-size: 0.95rem;
     cursor: not-allowed;
     user-select: none;
 }
@@ -153,10 +211,10 @@ button:disabled {
 .resolvingSpinner {
     width: 18px;
     height: 18px;
-    border: 3px solid rgba(255, 255, 255, .35);
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-top-color: #ffffff;
     border-radius: 50%;
-    animation: spin .7s linear infinite;
+    animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
@@ -164,77 +222,101 @@ button:disabled {
 }
 
 .warning {
-    padding: 12px 14px;
-    border: 2px solid var(--danger);
-    border-radius: 3px;
-    background: rgba(200, 93, 61, .1);
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    background: rgba(239, 68, 68, 0.1);
     color: var(--danger);
+    border: 1px solid rgba(239, 68, 68, 0.2);
     line-height: 1.5;
+    font-size: 0.9rem;
 }
 
 .markerLegend {
     display: flex;
-    gap: 18px;
+    gap: 16px;
     flex-wrap: wrap;
+    padding: 12px 16px;
+    background: var(--bg-app);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-light);
 }
 
 .legendItem {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: .9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--text);
 }
 
 .dot {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
+    box-shadow: 0 0 0 2px var(--surface);
 }
 
 .routePoints {
     display: grid;
-    gap: 10px;
+    gap: 12px;
 }
 
 .address {
     display: grid;
     gap: 4px;
-    padding: 14px;
-    border-radius: 3px;
-    background: var(--bg-strong);
-    border: 2px solid var(--border);
+    padding: 16px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-app);
+    border: 1px solid var(--border-light);
+}
+
+.address strong {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 2px;
 }
 
 .address span {
     color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.4;
 }
 
 .snapStatus {
     color: var(--primary) !important;
-    font-weight: 700;
+    font-weight: 600;
+    font-size: 0.8rem !important;
+    margin-top: 4px;
 }
 
 .address small {
-    color: var(--muted);
+    color: var(--text-muted);
 }
 
 .actions {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
+    padding-top: 8px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
+    .card {
+        padding: 18px;
+    }
+
     .heading h1 {
-        font-size: 2rem;
+        font-size: 1.75rem;
     }
 
     .fields {
         grid-template-columns: 1fr;
+        gap: 16px;
     }
 
     .fullWidth {
@@ -242,12 +324,13 @@ button:disabled {
     }
 
     .locationHeading {
-        align-items: start;
+        align-items: flex-start;
         flex-direction: column;
+        gap: 8px;
     }
 
     .map {
-        height: 360px;
+        height: 300px;
     }
 
     .actions {

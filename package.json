@@ -9,11 +9,13 @@
 		"lint": "oxlint",
 		"test": "node --test api/report-access.test.js",
 		"preview": "npm run build && vite preview",
-		"deploy": "npm run build && wrangler deploy"
+		"deploy": "npm run build && wrangler deploy",
+		"migrations": "npx wrangler d1 migrations apply road-map-db --remote"
 	},
 	"dependencies": {
 		"@clerk/backend": "^3.17.1",
 		"@clerk/react": "^6.12.10",
+		"@google/genai": "^2.28.0",
 		"chart.js": "^4.5.1",
 		"maplibre-gl": "^6.1.0",
 		"react": "^19.2.7",
@@ -32,6 +34,8 @@
 	},
 	"allowScripts": {
 		"esbuild@0.28.1": true,
-		"workerd@1.20260730.1": true
+		"workerd@1.20260730.1": true,
+		"@google/genai@2.28.0": true,
+		"protobufjs@7.6.6": true
 	}
 }

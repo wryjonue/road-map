@@ -23,6 +23,7 @@ function errorResponse(message, status = 400) { return json({ error: message }, 
 function mediaUrl(key) { return `/api/media/${key.split('/').map(encodeURIComponent).join('/')}`; }
 function canManageReports(auth) { return auth?.role === 'authority' || auth?.role === 'admin'; }
 function canReadPending(report, auth) { return canManageReports(auth) || auth?.userId === report.author_id; }
+function isArchived(report) { return report?.status === 'Rejected' || report?.deleted_at != null; }
 function getAuthorName(body, auth) {
 	const verifiedName = [auth.claims?.first_name, auth.claims?.last_name]
 		.filter((part) => typeof part === 'string' && part.trim())
@@ -63,13 +64,19 @@ async function findReport(env, id) {
 	const { results: images } = await env.road_map_db.prepare('SELECT id, r2_key, file_name, content_type FROM report_images WHERE report_id = ? ORDER BY id').bind(id).all();
 	return toReport(results[0], images);
 }
+async function findReportAny(env, id) {
+	const { results } = await env.road_map_db.prepare(`${REPORT_SELECT} WHERE r.id = ? LIMIT 1`).bind(id).all();
+	if (!results.length) return null;
+	const { results: images } = await env.road_map_db.prepare('SELECT id, r2_key, file_name, content_type FROM report_images WHERE report_id = ? ORDER BY id').bind(id).all();
+	return toReport(results[0], images);
+}
 function parsePagination(url) {
 	const rawLimit = Number(url.searchParams.get('limit') ?? 10); const rawOffset = Number(url.searchParams.get('offset') ?? 0);
 	if (!Number.isInteger(rawLimit) || rawLimit < 1) return { error: 'limit must be a positive integer' };
 	if (!Number.isInteger(rawOffset) || rawOffset < 0) return { error: 'offset must be a non-negative integer' };
 	return { limit: Math.min(rawLimit, MAX_PAGE_SIZE), offset: rawOffset };
 }
-const FEED_STATUSES = new Set(['Open', 'Pending', 'Resolved', 'Closed', 'Rejected']);
+const FEED_STATUSES = new Set(['Open', 'Pending', 'Resolved', 'Rejected']);
 const FEED_SORTS = new Set(['recent', 'oldest', 'votes']);
 function feedOrderBy(sort) {
 	if (sort === 'oldest') return 'ORDER BY r.created_at ASC, r.id ASC';
@@ -84,7 +91,7 @@ export async function listReports(env, url, auth = null) {
 	const categoryId = rawCategoryId === null || rawCategoryId === '' ? null : Number(rawCategoryId);
 	if (categoryId !== null && (!Number.isSafeInteger(categoryId) || categoryId < 1)) return errorResponse('categoryId must be a positive integer');
 	const status = url.searchParams.get('status');
-	if (status !== null && status !== '' && !FEED_STATUSES.has(status)) return errorResponse('status must be one of Open, Pending, Resolved, Closed, Rejected');
+	if (status !== null && status !== '' && !FEED_STATUSES.has(status)) return errorResponse('status must be one of Open, Pending, Resolved, Rejected');
 	const municipality = url.searchParams.get('municipality');
 	const city = municipality && municipality !== 'all' ? municipality.trim() : null;
 	const qRaw = url.searchParams.get('q');
@@ -111,11 +118,11 @@ export async function listReports(env, url, auth = null) {
 		}
 	}
 
-	const whereBase = `WHERE r.deleted_at IS NULL${filters}${visibility}`;
+	const whereBase = `WHERE r.deleted_at IS NULL AND r.status <> 'Rejected'${filters}${visibility}`;
 	// Count query uses the same predicates but without the r. alias on the base reports table.
 	const countFilters = filters.replaceAll('r.', '');
 	const countVisibility = visibility.replaceAll('r.', '');
-	const countWhere = `WHERE deleted_at IS NULL${countFilters}${countVisibility}`;
+	const countWhere = `WHERE deleted_at IS NULL AND status <> 'Rejected'${countFilters}${countVisibility}`;
 
 	const orderBy = feedOrderBy(sortParam);
 	const [{ results }, countResult] = await Promise.all([
@@ -237,8 +244,12 @@ export async function getHotspots(env, url) {
 }
 
 export async function getReport(env, id, status = 200, auth = null) {
-	const report = await findReport(env, id);
-	if (!report || (report.status === 'Pending' && !canReadPending({ status: report.status, author_id: report.authorId }, auth))) return errorResponse('Report not found', 404);
+	// Managers can view any report (including archived/deleted) via direct ID.
+	// Everyone else: archived (rejected or deleted) reports are invisible (404).
+	const report = canManageReports(auth) ? await findReportAny(env, id) : await findReport(env, id);
+	if (!report) return errorResponse('Report not found', 404);
+	if (isArchived(report) && !canManageReports(auth)) return errorResponse('Report not found', 404);
+	if (report.status === 'Pending' && !canReadPending({ status: report.status, author_id: report.authorId }, auth)) return errorResponse('Report not found', 404);
 	return json(report, status);
 }
 export async function approveReport(env, id, auth) {
@@ -258,7 +269,8 @@ export async function rejectReport(env, id, auth) {
 	const report = await env.road_map_db.prepare('SELECT status, author_id FROM reports WHERE id = ? AND deleted_at IS NULL').bind(id).first();
 	if (!report) return errorResponse('Report not found', 404);
 	if (report.status !== 'Pending') return errorResponse('Only pending reports can be rejected', 409);
-	const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Rejected', updated_at = ? WHERE id = ? AND status = 'Pending' AND deleted_at IS NULL").bind(new Date().toISOString(), id).run();
+	const now = new Date().toISOString();
+	const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Rejected', updated_at = ?, archived_at = ? WHERE id = ? AND status = 'Pending' AND deleted_at IS NULL").bind(now, now, id).run();
 	if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
 	await createNotification(env, { userId: report.author_id, type: 'report_rejected', reportId: id, actorId: auth.userId, message: 'Your report was rejected by an enforcer.' });
 	return getReport(env, id, 200, auth);
@@ -272,8 +284,8 @@ export async function deletePendingReport(env, id, auth) {
 	if (report.status !== 'Pending' && report.status !== 'Open') return errorResponse('Only pending or open reports can be deleted', 409);
 	const deletedAt = new Date().toISOString();
 	const ownershipClause = canManageReports(auth) ? '' : ' AND author_id = ?';
-	const bindings = canManageReports(auth) ? [deletedAt, deletedAt, id] : [deletedAt, deletedAt, id, auth.userId];
-	const result = await env.road_map_db.prepare(`UPDATE reports SET deleted_at = ?, updated_at = ? WHERE id = ? AND status IN ('Pending', 'Open') AND deleted_at IS NULL${ownershipClause}`).bind(...bindings).run();
+	const bindings = canManageReports(auth) ? [deletedAt, deletedAt, deletedAt, id] : [deletedAt, deletedAt, deletedAt, id, auth.userId];
+	const result = await env.road_map_db.prepare(`UPDATE reports SET deleted_at = ?, updated_at = ?, archived_at = ? WHERE id = ? AND status IN ('Pending', 'Open') AND deleted_at IS NULL${ownershipClause}`).bind(...bindings).run();
 	if (!result.meta.changes) return errorResponse('Report changed; reload and try again', 409);
 	return json({ id, deleted: true });
 }

@@ -29,7 +29,7 @@ export const REPORT_POSTS = [
 		avatar: 'RS',
 		poster: 'Rina Shah',
 		date: 'May 12, 2026',
-		status: 'Closed',
+		status: 'Resolved',
 		description: 'A truck spill has left debris scattered across the coastal intersection and is affecting slower-moving vehicles.',
 		image: null,
 		votes: 28,

@@ -212,7 +212,7 @@ export default function CreateReportPage() {
 	};
 
 	return (
-		<section className={`page-card ${styles.page}`}>
+		<div className={styles.page}>
 			<button
 				type="button"
 				className={`ghost-btn ${styles.backButton}`}
@@ -222,19 +222,33 @@ export default function CreateReportPage() {
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
 				Back to reports
 			</button>
-			<div className={styles.heading}><div><h1>Create Incident Report</h1></div></div>
+			<div className={styles.heading}>
+				<div>
+					<h1>Create Incident Report</h1>
+					<p>Share what you see to help keep our roads safer.</p>
+				</div>
+			</div>
 			<form className={styles.form} onSubmit={handleSubmit}>
-				<div className={styles.fields}>
-					<label className={styles.field}><span>Post Title</span><input type="text" value={form.title} onChange={(event) => updateField('title', event.target.value)} required /></label>
-					<label className={styles.field}><span>Category</span><select value={form.categoryId} onChange={(event) => updateField('categoryId', Number(event.target.value))}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-					<label className={`${styles.field} ${styles.fullWidth}`}><span>Post Description</span><textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} rows="5" required /></label>
-					<label className={`${styles.field} ${styles.fullWidth}`}><span>Image (optional)</span><input type="file" accept="image/*" onChange={handleImageChange} />{imagePreview && <img className={styles.preview} src={imagePreview} alt="Selected incident" />}</label>
+				<div className={`${styles.card} ${styles.detailsCard}`}>
+					<div className={styles.fields}>
+						<label className={styles.field}><span>Post Title</span><input type="text" value={form.title} onChange={(event) => updateField('title', event.target.value)} required placeholder="e.g. Pothole on Main St" /></label>
+						<label className={styles.field}><span>Category</span><select value={form.categoryId} onChange={(event) => updateField('categoryId', Number(event.target.value))}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+						<label className={`${styles.field} ${styles.fullWidth}`}><span>Post Description</span><textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} rows="4" required placeholder="Describe the incident in detail..." /></label>
+						<label className={`${styles.field} ${styles.fullWidth}`}>
+							<span>Image (optional)</span>
+							<input type="file" accept="image/*" onChange={handleImageChange} />
+							{imagePreview && <img className={styles.preview} src={imagePreview} alt="Selected incident" />}
+						</label>
+					</div>
 				</div>
 
-				<div className={styles.locationSection}>
+				<div className={`${styles.card} ${styles.locationCard}`}>
 					<div className={styles.locationHeading}>
-						<div><p>Drag the green and red marker on the map to start and end of the Path.</p></div>
-						{isResolving && <span className={styles.loading}>Fetching address...</span>}
+						<div>
+							<h2>Location & Route</h2>
+							<p>Drag the green and red markers on the map to set the start and end of the path.</p>
+						</div>
+						{isResolving && <span className={styles.loading}><span className={styles.resolvingSpinner} style={{ width: 14, height: 14, borderWidth: 2 }} /> Fetching address...</span>}
 					</div>
 					<div className={styles.markerLegend}>
 						<span className={styles.legendItem}><span className={styles.dot} style={{ background: '#2d7a5d' }} /> Path Start</span>
@@ -252,6 +266,6 @@ export default function CreateReportPage() {
 				</div>
 				<div className={styles.actions}><button type="submit" className="primary-btn" disabled={isSubmitting || isResolving}>{isSubmitting ? 'Submitting...' : 'Submit Report'}</button></div>
 			</form>
-		</section>
+		</div>
 	);
 }

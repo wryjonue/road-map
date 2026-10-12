@@ -4,7 +4,7 @@ export async function getDashboardMetrics(env) {
 			COUNT(r.id) AS report_count,
 			COALESCE(SUM(CASE WHEN r.status = 'Resolved' THEN 1 ELSE 0 END), 0) AS resolved_count
 		FROM categories c
-		LEFT JOIN reports r ON r.category_id = c.id AND r.deleted_at IS NULL
+		LEFT JOIN reports r ON r.category_id = c.id AND r.deleted_at IS NULL AND r.status <> 'Rejected'
 		GROUP BY c.id, c.name
 		ORDER BY c.id
 	`).all();
@@ -53,6 +53,33 @@ export async function getPendingReports(env, auth, limit = 10) {
 	return Response.json({ reports }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
+export async function getArchivedReports(env, auth, limit = 10) {
+	const role = auth?.role;
+	if (role !== 'authority' && role !== 'admin') {
+		return Response.json({ error: 'Forbidden' }, { status: 403 });
+	}
+	const safeLimit = Math.min(Math.max(Number.isInteger(limit) ? limit : 10, 1), 20);
+	const { results } = await env.road_map_db.prepare(`
+		SELECT r.id, r.title, r.author_name, r.status, r.deleted_at, r.archived_at, r.updated_at,
+			r.barangay, r.city, r.province, r.resolved_address,
+			c.id AS category_id, c.name AS category_name
+		FROM reports r JOIN categories c ON c.id = r.category_id
+		WHERE (r.status = 'Rejected' OR r.deleted_at IS NOT NULL)
+		ORDER BY COALESCE(r.archived_at, r.deleted_at, r.updated_at) DESC, r.id DESC
+		LIMIT ?
+	`).bind(safeLimit).all();
+	const reports = results.map((row) => ({
+		id: row.id,
+		title: row.title,
+		poster: row.author_name || 'Community reporter',
+		category: { id: row.category_id, name: row.category_name },
+		location: { barangay: row.barangay, city: row.city, province: row.province, resolvedAddress: row.resolved_address },
+		reason: row.deleted_at != null ? 'Deleted' : 'Rejected',
+		archivedAt: row.archived_at || row.deleted_at || row.updated_at,
+	}));
+	return Response.json({ reports }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
 export async function getMonthlyReport(env, month, municipality) {
 	if (!/^\d{4}-\d{2}$/.test(month)) return Response.json({ error: 'Month must be in YYYY-MM format' }, { status: 400 });
 	const [year, mon] = month.split('-').map(Number);
@@ -73,17 +100,18 @@ export async function getMonthlyReport(env, month, municipality) {
 			COALESCE(SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END), 0) AS resolved,
 			COALESCE(SUM(CASE WHEN status != 'Resolved' THEN 1 ELSE 0 END), 0) AS unresolved
 		FROM reports
-		WHERE deleted_at IS NULL AND created_at >= ? AND created_at < ? ${muniFilter}
+		WHERE deleted_at IS NULL AND status <> 'Rejected' AND created_at >= ? AND created_at < ? ${muniFilter}
 	`).bind(...params).all();
 	const summary = summaryRows[0] || { total: 0, resolved: 0, unresolved: 0 };
 
+	const muniFilterR = muniFilter.replace('AND city', 'AND r.city');
 	const { results: categoryRows } = await env.road_map_db.prepare(`
 		SELECT c.name AS category_name,
 			COUNT(r.id) AS total,
 			COALESCE(SUM(CASE WHEN r.status = 'Resolved' THEN 1 ELSE 0 END), 0) AS resolved,
 			COALESCE(SUM(CASE WHEN r.status != 'Resolved' THEN 1 ELSE 0 END), 0) AS active
 		FROM categories c
-		LEFT JOIN reports r ON r.category_id = c.id AND r.deleted_at IS NULL AND r.created_at >= ? AND r.created_at < ? ${muniFilter.replace('AND city', 'AND r.city')}
+		LEFT JOIN reports r ON r.category_id = c.id AND r.deleted_at IS NULL AND r.status <> 'Rejected' AND r.created_at >= ? AND r.created_at < ? ${muniFilterR}
 		GROUP BY c.id, c.name
 		HAVING total > 0
 		ORDER BY total DESC
@@ -93,7 +121,7 @@ export async function getMonthlyReport(env, month, municipality) {
 		SELECT COALESCE(NULLIF(city, ''), 'Unknown municipality') AS municipality,
 			COUNT(*) AS count
 		FROM reports
-		WHERE deleted_at IS NULL AND created_at >= ? AND created_at < ?
+		WHERE deleted_at IS NULL AND status <> 'Rejected' AND created_at >= ? AND created_at < ?
 		GROUP BY municipality
 		ORDER BY count DESC
 	`).bind(start, end).all();

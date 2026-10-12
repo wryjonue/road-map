@@ -10,7 +10,6 @@ const STATUS_OPTIONS = [
 	{ value: 'Open', label: 'Open' },
 	{ value: 'Pending', label: 'Pending' },
 	{ value: 'Resolved', label: 'Resolved' },
-	{ value: 'Closed', label: 'Closed' },
 	{ value: 'Rejected', label: 'Rejected' },
 ];
 const SORT_OPTIONS = [

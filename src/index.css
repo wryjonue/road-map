@@ -286,7 +286,6 @@ select.status-badge:focus-visible {
 	color: var(--text);
 }
 
-.status-closed,
 .status-disputed {
 	background: rgba(200, 93, 61, .12);
 	color: var(--danger);

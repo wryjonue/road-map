@@ -60,7 +60,6 @@
 .statusPill.resolved { background: rgba(98, 107, 115, .14); }
 .statusPill.pending { background: rgba(194, 138, 34, .16); }
 .statusPill.rejected { background: rgba(189, 62, 80, .14); }
-.statusPill.closed { background: rgba(100, 116, 139, .14); }
 
 /* Custom dropdown */
 .dropdown {
@@ -110,7 +109,6 @@
 .triggerDot.resolved { background: #626b73; }
 .triggerDot.pending { background: #c28a22; }
 .triggerDot.rejected { background: #bd3e50; }
-.triggerDot.closed { background: #64748b; }
 
 .chevron {
 	width: 14px;
