@@ -231,7 +231,7 @@ export default function CreateReportPage() {
 			<form className={styles.form} onSubmit={handleSubmit}>
 				<div className={`${styles.card} ${styles.detailsCard}`}>
 					<div className={styles.fields}>
-						<label className={styles.field}><span>Post Title</span><input type="text" value={form.title} onChange={(event) => updateField('title', event.target.value)} required placeholder="e.g. Pothole on Main St" /></label>
+						<label className={styles.field}><span>Post Title</span><input type="text" value={form.title} onChange={(event) => updateField('title', event.target.value)} required placeholder="e.g. Pothole sa Lucanin Highway" /></label>
 						<label className={styles.field}><span>Category</span><select value={form.categoryId} onChange={(event) => updateField('categoryId', Number(event.target.value))}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
 						<label className={`${styles.field} ${styles.fullWidth}`}><span>Post Description</span><textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} rows="4" required placeholder="Describe the incident in detail..." /></label>
 						<label className={`${styles.field} ${styles.fullWidth}`}>

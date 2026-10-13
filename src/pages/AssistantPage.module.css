@@ -122,6 +122,72 @@
 }
 
 .reportCard {
+  display: block;
+  background: var(--bg-app);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-decoration: none;
+  color: var(--text);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  margin: 8px 0;
+}
+
+.reportCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.reportCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.reportId {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 1rem;
+}
+
+.statusBadge {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.statusOpen { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+.statusPending { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+.statusResolved { background: rgba(16, 185, 129, 0.1); color: #059669; }
+
+.reportTitle {
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.reportMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.reportMeta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reportCard {
 	display: block;
 	background: var(--bg-app);
 	border: 1px solid var(--border-light);
