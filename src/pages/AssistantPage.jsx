@@ -11,11 +11,11 @@ const EXAMPLE_PROMPTS = [
 	'What incidents are near Mariveles?',
 ];
 
-// Parse a single line for inline formatting: bold, italic, links.
+// Parse a single line for inline formatting: bold, italic, markdown links, report refs.
 function parseInline(text, keyPrefix) {
 	const nodes = [];
-	// Pattern: **bold**, *italic*, [#id], #id
-	const pattern = /(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[#?(\d+)\])|(#(\d+))/g;
+	// Pattern: **bold**, *italic*, [text](url), [#id], #id
+	const pattern = /(\*\*[^*]+\*\*)|(\*[^*]+\*)|\[([^\]]+)\]\(([^)]+)\)|(\[#?(\d+)\])|(#(\d+))/g;
 	let lastIndex = 0;
 	let match;
 	let key = 0;
@@ -31,9 +31,22 @@ function parseInline(text, keyPrefix) {
 		} else if (match[2]) {
 			// *italic*
 			nodes.push(<em key={`${keyPrefix}-i-${key++}`}>{match[2].slice(1, -1)}</em>);
+		} else if (match[3] && match[4]) {
+			// [text](url) markdown link — only linkify /feed/ paths, render others as plain text
+			const linkText = match[3];
+			const linkUrl = match[4];
+			if (linkUrl.startsWith('/feed/')) {
+				nodes.push(
+					<Link key={`${keyPrefix}-ml-${key++}`} to={linkUrl} className={styles.reportLink}>
+						{linkText}
+					</Link>
+				);
+			} else {
+				nodes.push(<span key={`${keyPrefix}-ml-${key++}`}>{linkText}</span>);
+			}
 		} else {
 			// [#30] or #30
-			const id = match[4] || match[6];
+			const id = match[6] || match[8];
 			nodes.push(
 				<Link key={`${keyPrefix}-l-${key++}`} to={`/feed/${id}`} className={styles.reportLink}>
 					{match[0]}
