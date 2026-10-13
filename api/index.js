@@ -3,6 +3,7 @@ import { getArchivedReports, getDashboardMetrics, getMonthlyReport, getPendingRe
 import { getCalculatedRoute, getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
 import { chatWithGemini, MAX_MESSAGE_LENGTH } from './ai-service.js';
+import { getRecentHistory, saveMessage, clearHistory } from './chat-service.js';
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
 import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from './notification-service.js';
 
@@ -47,8 +48,27 @@ export default {
 				const message = typeof body?.message === 'string' ? body.message.trim() : '';
 				if (!message) return Response.json({ error: 'message is required' }, { status: 400 });
 				if (message.length > MAX_MESSAGE_LENGTH) return Response.json({ error: `message must be ${MAX_MESSAGE_LENGTH} characters or fewer` }, { status: 400 });
-				const result = await chatWithGemini(env, message);
+				const history = await getRecentHistory(env, auth.userId);
+				await saveMessage(env, auth.userId, 'user', message);
+				const result = await chatWithGemini(env, message, history);
+				await saveMessage(env, auth.userId, 'assistant', result.reply);
 				return Response.json(result, { headers: { 'Cache-Control': 'no-store' } });
+			}
+			if (url.pathname === '/api/ai/history') {
+				if (request.method === 'GET') {
+					const auth = await requireUser(request, env);
+					if (auth instanceof Response) return auth;
+					const rawLimit = Number(url.searchParams.get('limit') ?? 20);
+					const messages = await getRecentHistory(env, auth.userId, rawLimit);
+					return Response.json({ messages }, { headers: { 'Cache-Control': 'no-store' } });
+				}
+				if (request.method === 'DELETE') {
+					const auth = await requireUser(request, env);
+					if (auth instanceof Response) return auth;
+					await clearHistory(env, auth.userId);
+					return Response.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } });
+				}
+				return Response.json({ error: 'Method not allowed' }, { status: 405 });
 			}
 			if (url.pathname === '/api/location/resolve') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });

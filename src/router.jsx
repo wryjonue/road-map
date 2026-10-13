@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import RootLayout from './components/RootLayout';
 import RequireRole from './components/RequireRole';
-import { About, CreateReportPage, Dashboard, FeedPage, Home, MapView, SignInPage, SignUpPage, TicketsPage, ViewReportPage } from './lazy-pages';
+import { About, AssistantPage, CreateReportPage, Dashboard, FeedPage, Home, MapView, SignInPage, SignUpPage, TicketsPage, ViewReportPage } from './lazy-pages';
 import { ROUTE_ENABLED } from './route-flags';
 
 function renderPage(Page) {
@@ -25,6 +25,7 @@ export const router = createBrowserRouter([
 			{ path: 'sign-up/*', element: renderPage(SignUpPage) },
 			{ path: 'sign-up/verify-email-address', element: renderPage(SignUpPage) },
 			{ path: 'map', element: renderPage(MapView) },
+			{ path: 'assistant', element: renderPage(AssistantPage) },
 			...(ROUTE_ENABLED.about ? [{ path: 'about', element: renderPage(About) }] : []),
 		],
 	},

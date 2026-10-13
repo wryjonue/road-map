@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { haversineDistanceMeters } from './clustering.js';
 
-const MODEL = 'gemini-3.8-flash';
+const MODEL = 'gemini-3.5-flash-lite';
 const MAX_TURNS = 5;
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -11,7 +11,13 @@ Users report road problems (construction, closures, accidents, damaged/flooded r
 Rules:
 - Only answer using the provided tools. Never invent report ids, titles, counts, or locations.
 - Reports that are rejected or deleted are archived and hidden from the public — your tools already exclude them, so do not mention archived reports.
-- Be concise. When listing reports, include their id and title so the user can reference them.
+- When listing reports, format each one exactly like this:
+  Report #ID
+  - Status: STATUS
+  - Title: TITLE
+  - Municipality: MUNICIPALITY
+  - Date: DATE
+- Be concise. Include only the ID, title, municipality, status, and date for each report.
 - Distances are in kilometers; coordinates are longitude/latitude (WGS84). Bataan is around latitude 14.68, longitude 120.54.
 - If a tool returns no results, say so plainly and suggest broadening the search.`;
 
@@ -57,7 +63,7 @@ const TOOLS = [
 			},
 			required: ['latitude', 'longitude'],
 		},
-	},
+	}
 ];
 
 const FUNCTION_DECLARATIONS = TOOLS.map(({ name, description, parameters }) => ({ name, description, parameters }));
@@ -214,7 +220,7 @@ async function executeTool(env, name, args) {
 	}
 }
 
-export async function chatWithGemini(env, message) {
+export async function chatWithGemini(env, message, history = []) {
 	if (!env.GEMINI_API_KEY) {
 		return { reply: 'The AI assistant is not configured on this server.' };
 	}
@@ -229,11 +235,43 @@ export async function chatWithGemini(env, message) {
 		return { reply: 'Unable to initialize the AI assistant.' };
 	}
 
-	const contents = [{ role: 'user', parts: [{ text: safeMessage }] }];
+	// Seed multi-turn context from persisted history (DB roles: user/assistant -> Gemini: user/model).
+	// Cap to the most recent MAX_TURNS*2 entries to control cost/latency and stay within limits.
+	const prior = Array.isArray(history) ? history.slice(-(MAX_TURNS * 2)) : [];
+	const contents = [
+		...prior
+			.filter((entry) => entry && typeof entry.content === 'string' && entry.content.trim())
+			.map((entry) => ({
+				role: entry.role === 'assistant' ? 'model' : 'user',
+				parts: [{ text: entry.content.slice(0, MAX_MESSAGE_LENGTH) }],
+			})),
+		{ role: 'user', parts: [{ text: safeMessage }] },
+	];
+
+	const MAX_RETRIES = 2;
+
+	async function generateWithRetry(payload) {
+		for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+			try {
+				return await ai.models.generateContent(payload);
+			} catch (err) {
+				const msg = err?.message || String(err);
+				const status = err?.status ?? err?.code;
+				const isRetryable = status === 503 || status === 429 || status === 'UNAVAILABLE' ||
+					msg.includes('high demand') || msg.includes('overloaded') || msg.includes('RESOURCE_EXHAUSTED');
+				if (isRetryable && attempt < MAX_RETRIES) {
+					const delayMs = 1000 * Math.pow(2, attempt);
+					await new Promise((r) => setTimeout(r, delayMs));
+					continue;
+				}
+				throw err;
+			}
+		}
+	}
 
 	try {
 		for (let turn = 0; turn < MAX_TURNS; turn++) {
-			const response = await ai.models.generateContent({
+			const response = await generateWithRetry({
 				model: MODEL,
 				contents,
 				config: {
@@ -269,6 +307,10 @@ export async function chatWithGemini(env, message) {
 		return { reply: 'I reached the limit of my lookups and could not finish answering. Try narrowing your question.' };
 	} catch (error) {
 		console.error('[ai-chat] error', error?.message || error);
+		const msg = error?.message || String(error);
+		if (msg.includes('high demand') || msg.includes('503') || msg.includes('UNAVAILABLE')) {
+			return { reply: 'The AI service is temporarily busy. Please try again in a moment.' };
+		}
 		return { reply: 'Sorry, the AI assistant encountered an error. Please try again.' };
 	}
 }

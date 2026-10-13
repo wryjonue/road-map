@@ -113,10 +113,14 @@ export default function Sidebar({ isOpen, onClose }) {
               </NavLink>
             )}
             
-            <div className={styles.navItemDisabled}>
+            <NavLink 
+              to="/assistant" 
+              className={({ isActive }) => `navlink ${isActive ? 'active' : ''}`}
+              onClick={onClose}
+            >
               <Icons.AI />
               <span>AI road assistant</span>
-            </div>
+            </NavLink>
           </div>
         </nav>
 

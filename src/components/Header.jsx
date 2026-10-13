@@ -17,6 +17,7 @@ export default function Header({ onMenuClick }) {
 		if (path === '/dashboard') return 'Dashboard';
 		if (path === '/feed') return 'Community Reports';
 		if (path === '/map') return 'Incident Map';
+		if (path === '/assistant') return 'AI Assistant';
 		if (path === '/tickets') return 'Tickets';
 		if (path.startsWith('/feed/')) return 'Report Details';
 		return 'RoadMap';
