@@ -81,6 +81,214 @@
     padding: 9px 18px;
 }
 
+.viewToggle {
+    display: inline-flex;
+    margin-left: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--surface);
+}
+
+.viewToggleBtn {
+    padding: 9px 16px;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.viewToggleBtn:hover {
+    background: var(--panel-soft);
+    color: var(--text);
+}
+
+.viewToggleBtnActive,
+.viewToggleBtnActive:hover {
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.viewToggleBtn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+
+.tableWrap {
+    overflow-x: auto;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.table th {
+    padding: 12px 14px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--primary);
+    white-space: nowrap;
+}
+
+.table td {
+    padding: 14px;
+    font-size: 0.875rem;
+    color: var(--text);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table tbody tr:hover {
+    background: var(--panel-soft);
+}
+
+.posterCell {
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.posterRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+}
+
+.titleCell {
+    font-weight: 600;
+    max-width: 220px;
+}
+
+.descCell {
+    color: var(--text-muted);
+    max-width: 280px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.locationCell {
+    color: var(--text-muted);
+    max-width: 200px;
+}
+
+.categoryPill {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 9999px;
+    background: var(--category-color);
+    color: white;
+    white-space: nowrap;
+}
+
+.statusPill {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 9999px;
+    color: #475569;
+    white-space: nowrap;
+}
+
+.status-open {
+    background: rgba(45, 122, 93, 0.14);
+}
+
+.status-resolved {
+    background: rgba(98, 107, 115, 0.14);
+}
+
+.status-pending {
+    background: rgba(194, 138, 34, 0.16);
+}
+
+.status-rejected {
+    background: rgba(189, 62, 80, 0.14);
+}
+
+.actionsCol {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.viewBtn {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--primary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.viewBtn:hover {
+    background: var(--primary-soft);
+    border-color: var(--primary);
+}
+
+.viewBtn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
 .list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -128,5 +336,25 @@
     .filterSelect,
     .applyBtn {
         width: 100%;
+    }
+
+    .viewToggle {
+        margin-left: 0;
+        align-self: flex-start;
+    }
+
+    .descCol {
+        display: none;
+    }
+
+    .table th,
+    .table td {
+        padding: 10px 8px;
+        font-size: 0.8rem;
+    }
+
+    .titleCell,
+    .locationCell {
+        max-width: 140px;
     }
 }

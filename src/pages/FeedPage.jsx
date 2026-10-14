@@ -5,6 +5,19 @@ import ReportPostCard from '../components/ReportPostCard';
 import styles from './FeedPage.module.css';
 
 const DEFAULT_FILTERS = { categoryId: '', status: '', municipality: '', q: '', sort: 'recent' };
+const VIEW_MODES = { default: 'default', list: 'list' };
+const VIEW_MODE_STORAGE_KEY = 'road-map:feed-view-mode';
+const CATEGORY_COLORS = {
+	1: '#c65d2e',
+	2: '#bd3e50',
+	3: '#8b6aad',
+	4: '#27829a',
+	5: '#607d35',
+	6: '#c28a22',
+	7: '#376fa3',
+	8: '#aa4776',
+	9: '#5f6972',
+};
 const STATUS_OPTIONS = [
 	{ value: '', label: 'All statuses' },
 	{ value: 'Open', label: 'Open' },
@@ -20,6 +33,35 @@ const SORT_OPTIONS = [
 
 function filtersEqual(a, b) {
 	return Object.keys(DEFAULT_FILTERS).every((key) => a[key] === b[key]);
+}
+
+function locationDisplayName(location) {
+	if (!location) return '—';
+	const parts = [location.barangay, location.city, location.province]
+		.filter((part) => typeof part === 'string' && part.trim());
+	return parts.length > 0 ? parts.join(', ') : '—';
+}
+
+function readStoredViewMode() {
+	try {
+		const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+		return stored === VIEW_MODES.list ? VIEW_MODES.list : VIEW_MODES.default;
+	} catch {
+		return VIEW_MODES.default;
+	}
+}
+
+function ListAuthorAvatar({ src, name }) {
+	const [failed, setFailed] = useState(false);
+	useEffect(() => setFailed(false), [src]);
+	const initials = name?.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
+	return (
+		<span className={styles.avatar}>
+			{src && !failed
+				? <img src={src} alt="" onError={() => setFailed(true)} />
+				: initials}
+		</span>
+	);
 }
 
 function buildQuery(filters, offset) {
@@ -40,6 +82,16 @@ export default function FeedPage() {
 	const [pagination, setPagination] = useState({ limit: 10, offset: 0, total: 0, hasMore: false });
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState('');
+	const [viewMode, setViewMode] = useState(readStoredViewMode);
+
+	// Persist the selected view mode across visits.
+	useEffect(() => {
+		try {
+			window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+		} catch {
+			/* storage unavailable (private mode); toggle still works for this visit */
+		}
+	}, [viewMode]);
 
 	// Facets for the dropdowns
 	const [categories, setCategories] = useState([]);
@@ -123,9 +175,7 @@ export default function FeedPage() {
 
 	return (
 		<div className={styles.feedPage}>
-			<div className={styles.feedHeader}>
-				<p className={styles.feedSubtitle}>Local voices. Safer journeys. Share what you see.</p>
-			</div>
+	
 
 			<div className={styles.topbar}>
 				<div className={styles.searchWrap}>
@@ -184,12 +234,30 @@ export default function FeedPage() {
 				{hasActiveFilters && !isDirty && (
 				<button className="ghost-btn" type="button" onClick={clearFilters}>Clear filters</button>
 				)}
+				<div className={styles.viewToggle} role="group" aria-label="Feed view mode">
+					<button
+						type="button"
+						className={`${styles.viewToggleBtn} ${viewMode === VIEW_MODES.default ? styles.viewToggleBtnActive : ''}`}
+						aria-pressed={viewMode === VIEW_MODES.default}
+						onClick={() => setViewMode(VIEW_MODES.default)}
+					>
+						Default
+					</button>
+					<button
+						type="button"
+						className={`${styles.viewToggleBtn} ${viewMode === VIEW_MODES.list ? styles.viewToggleBtnActive : ''}`}
+						aria-pressed={viewMode === VIEW_MODES.list}
+						onClick={() => setViewMode(VIEW_MODES.list)}
+					>
+						List
+					</button>
+				</div>
 			</div>
 
 			{isLoading && reports.length === 0 && <p className={styles.state}>Loading reports...</p>}
 			{error && <p className={styles.error} role="alert">{error}</p>}
 			{!isLoading && !error && reports.length === 0 && <p className={styles.state}>No reports match these filters.</p>}
-			{reports.length > 0 && (
+			{reports.length > 0 && viewMode === VIEW_MODES.default && (
 				<div className={styles.list}>
 					{reports.map((report) => (
 						<ReportPostCard
@@ -200,6 +268,69 @@ export default function FeedPage() {
 							date={report.createdAt}
 						/>
 					))}
+				</div>
+			)}
+			{reports.length > 0 && viewMode === VIEW_MODES.list && (
+				<div className={styles.tableWrap}>
+					<table className={styles.table}>
+						<thead>
+							<tr>
+								<th>Poster</th>
+								<th>Title</th>
+								<th className={styles.descCol}>Description</th>
+								<th>Location</th>
+								<th>Category</th>
+								<th>Status</th>
+								<th className={styles.actionsCol}>Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{reports.map((report) => {
+								const poster = report.authorName || (report.authorId === user?.id ? authorName : report.authorId) || '—';
+								const status = report.status || '—';
+								return (
+									<tr key={report.id}>
+										<td className={styles.posterCell}>
+											<div className={styles.posterRow}>
+												<ListAuthorAvatar
+													src={report.authorImageUrl || (report.authorId === user?.id ? user?.imageUrl : null)}
+													name={poster}
+												/>
+												<span>{poster}</span>
+											</div>
+										</td>
+										<td className={styles.titleCell}>{report.title}</td>
+										<td className={`${styles.descCell} ${styles.descCol}`}>{report.description}</td>
+										<td className={styles.locationCell}>{locationDisplayName(report.location)}</td>
+										<td>
+											<span
+												className={styles.categoryPill}
+												style={{ '--category-color': CATEGORY_COLORS[report.category?.id] || '#5f6972' }}
+											>
+												{report.category?.name || 'Uncategorized'}
+											</span>
+										</td>
+										<td>
+											<span className={`${styles.statusPill} ${styles[`status-${status.toLowerCase()}`] || ''}`}>
+												{status}
+											</span>
+										</td>
+										<td className={styles.actionsCol}>
+											<div className={styles.actions}>
+												<Link
+													to={`/feed/${report.id}`}
+													className={styles.viewBtn}
+													aria-label={`View report: ${report.title}`}
+												>
+													View
+												</Link>
+											</div>
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
 				</div>
 			)}
 			{pagination.hasMore && (
