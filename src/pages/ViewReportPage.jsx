@@ -64,6 +64,17 @@ function ReportMediaImage({ src, alt, className }) {
 	return <img className={className} src={src} alt={alt} />;
 }
 
+function CommentAvatar({ src, name }) {
+	const [failed, setFailed] = useState(false);
+	useEffect(() => setFailed(false), [src]);
+	const initials = name?.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
+	return (
+		<div className={styles.commentAvatar}>
+			{src && !failed ? <img src={src} alt="" onError={() => setFailed(true)} /> : <span>{initials}</span>}
+		</div>
+	);
+}
+
 export default function ViewReportPage() {
 	const { id } = useParams();
 	const navigate = useNavigate();
@@ -81,6 +92,11 @@ export default function ViewReportPage() {
 	const [isVoting, setIsVoting] = useState(false);
 	const voteSyncedRef = useRef(false);
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [comments, setComments] = useState([]);
+	const [areCommentsLoading, setAreCommentsLoading] = useState(false);
+	const [commentText, setCommentText] = useState('');
+	const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+	const [isDeletingCommentId, setIsDeletingCommentId] = useState(null);
 	const userLocationRef = useRef(null);
 	const dropdownRef = useRef(null);
 	const menuItemsRef = useRef([]);
@@ -140,6 +156,32 @@ export default function ViewReportPage() {
 		void loadVoteStatus();
 		return () => controller.abort();
 	}, [id, getToken, isLoaded, isSignedIn]);
+
+	// Load comments once per report id (public list; auth header only when signed in).
+	useEffect(() => {
+		if (!isLoaded || !report) return undefined;
+		const controller = new AbortController();
+		const loadComments = async () => {
+			setAreCommentsLoading(true);
+			try {
+				const token = isSignedIn ? await getToken() : null;
+				const response = await fetch(`/api/reports/${id}/comments`, {
+					headers: token ? { Authorization:  `Bearer ${token}` } : {},
+					signal: controller.signal,
+				});
+				const data = await response.json();
+				if (!response.ok || controller.signal.aborted) return;
+				setComments(data.comments ?? []);
+				setReport((current) => (current ? { ...current, commentCount: data.commentCount ?? current.commentCount } : current));
+			} catch {
+				/* comments are non-critical; keep the section visible with the empty state */
+			} finally {
+				if (!controller.signal.aborted) setAreCommentsLoading(false);
+			}
+		};
+		void loadComments();
+		return () => controller.abort();
+	}, [id, isLoaded, isSignedIn, getToken, report?.id]);
 
 	useEffect(() => {
 		if (!mapContainer.current || !report) return undefined;
@@ -309,6 +351,68 @@ export default function ViewReportPage() {
 			setError(voteError.message || 'Unable to update vote');
 		} finally {
 			setIsVoting(false);
+		}
+	};
+
+	const submitComment = async (event) => {
+		event.preventDefault();
+		if (isSubmittingComment) return;
+		const text = commentText.trim();
+		if (!text) return;
+		setIsSubmittingComment(true);
+		setError('');
+		try {
+			const token = await getToken();
+			if (!token) throw new Error('Sign in to comment on reports.');
+			const response = await fetch(`/api/reports/${id}/comments`, {
+				method: 'POST',
+				headers: { Authorization:  `Bearer ${token}`, 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					body: text,
+					authorName: [user?.firstName, user?.lastName].filter(Boolean).join(' '),
+					authorImageUrl: user?.imageUrl || '',
+				}),
+			});
+			const data = await response.json();
+			if (!response.ok) throw new Error(data.error || 'Unable to post comment');
+			if (data.comment) setComments((current) => [data.comment, ...current]);
+			setCommentText('');
+			if (typeof data.commentCount === 'number') {
+				setReport((current) => (current ? { ...current, commentCount: data.commentCount } : current));
+			}
+		} catch (commentError) {
+			setError(commentError.message || 'Unable to post comment');
+		} finally {
+			setIsSubmittingComment(false);
+		}
+	};
+
+	const canDeleteComment = (comment) => {
+		if (!isSignedIn || comment.isSystem) return false;
+		return role === 'admin' || comment.authorId === user?.id || report.authorId === user?.id;
+	};
+
+	const removeComment = async (commentId) => {
+		if (isDeletingCommentId || !window.confirm('Delete this comment?')) return;
+		setIsDeletingCommentId(commentId);
+		setError('');
+		try {
+			const token = await getToken();
+			if (!token) throw new Error('Sign in again to delete this comment.');
+			const response = await fetch(`/api/reports/${id}/comments/${commentId}`, {
+				method: 'DELETE',
+				headers: { Authorization:  `Bearer ${token}` },
+			});
+			const data = await response.json();
+			if (!response.ok) throw new Error(data.error || 'Unable to delete comment');
+			setComments((current) => current.filter((comment) => comment.id !== commentId));
+			if (typeof data.commentCount === 'number') {
+				setReport((current) => (current ? { ...current, commentCount: data.commentCount } : current));
+			}
+		} catch (deleteError) {
+			setError(deleteError.message || 'Unable to delete comment');
+		} finally {
+			setIsDeletingCommentId(null);
 		}
 	};
 
@@ -486,10 +590,85 @@ export default function ViewReportPage() {
 
 			{/* Comments */}
 			<div className={`${styles.card} ${styles.commentsCard}`} aria-labelledby="comments-heading">
-				<h2 id="comments-heading">Comments ({report.commentCount})</h2>
-				<div className={styles.commentsPlaceholder}>
-					<p>Comments feature coming soon.</p>
-				</div>
+				<h2 id="comments-heading">Comments ({report.commentCount ?? 0})</h2>
+
+				{isSignedIn && (
+					<form className={styles.commentForm} onSubmit={submitComment}>
+						<textarea
+							className={styles.commentTextarea}
+							value={commentText}
+							onChange={(event) => setCommentText(event.target.value)}
+							placeholder="Add a comment about this report..."
+							aria-label="Comment text"
+							rows={3}
+							maxLength={2000}
+							disabled={isSubmittingComment}
+							required
+						/>
+						<div className={styles.commentFormActions}>
+							<button
+								type="submit"
+								className="primary-btn"
+								disabled={isSubmittingComment || !commentText.trim()}
+							>
+								{isSubmittingComment ? 'Posting…' : 'Post comment'}
+							</button>
+						</div>
+					</form>
+				)}
+
+				{areCommentsLoading ? (
+					<p className={styles.commentsEmpty}>Loading comments...</p>
+				) : comments.length === 0 ? (
+					<div className={styles.commentsEmpty}>
+						<p>No comments yet.</p>
+					</div>
+				) : (
+					<ul className={styles.commentList}>
+						{comments.map((comment) => (
+							<li
+								key={comment.id}
+								className={`${styles.commentItem} ${comment.isSystem ? styles.commentSystem : ''}`}
+							>
+								{comment.isSystem ? (
+									<span className={styles.systemAvatar} aria-hidden="true">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+											<polyline points="20 6 9 17 4 12" />
+										</svg>
+									</span>
+								) : (
+									<CommentAvatar src={comment.authorImageUrl} name={comment.authorName} />
+								)}
+								<div className={styles.commentContent}>
+									<div className={styles.commentHeader}>
+										<span className={styles.commentAuthor}>
+											{comment.isSystem ? 'RoadMap System' : (comment.authorName || 'Community member')}
+										</span>
+										{comment.isSystem && <span className={styles.systemTag}>Status update</span>}
+										<span className={styles.commentTime}>
+											{new Date(comment.createdAt).toLocaleString()}
+										</span>
+										{canDeleteComment(comment) && (
+											<button
+												type="button"
+												className={styles.commentDeleteBtn}
+												onClick={() => void removeComment(comment.id)}
+												disabled={isDeletingCommentId === comment.id}
+												aria-label="Delete comment"
+											>
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+													<polyline points="3 6 5 6 21 6" />
+													<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+												</svg>
+											</button>
+										)}
+									</div>
+									<p className={styles.commentBody}>{comment.body}</p>
+								</div>
+							</li>
+						))}
+					</ul>
+				)}
 			</div>
 		</div>
 	);

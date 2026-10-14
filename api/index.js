@@ -1,4 +1,5 @@
 import { approveReport, createReport, deletePendingReport, getHotspots, getMapReports, getMedia, getReport, getReportFacets, getVoteStatus, listReports, rejectReport, resolveReport, voteReport } from './report-service.js';
+import { createComment, deleteComment, getComments } from './comment-service.js';
 import { getArchivedReports, getDashboardMetrics, getMonthlyReport, getPendingReports } from './dashboard-service.js';
 import { getCalculatedRoute, getSampleRoute } from './routing-service.js';
 import { getOptionalUser, requireUser } from './auth.js';
@@ -185,6 +186,28 @@ const voteMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
 			const auth = await getOptionalUser(request, env);
 			if (auth instanceof Response) return auth;
 			return getVoteStatus(env, Number(voteStatusMatch[1]), auth?.userId ?? null);
+		}
+		const commentsMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/comments$/);
+		if (commentsMatch) {
+			const reportId = Number(commentsMatch[1]);
+			if (request.method === 'GET') {
+				const auth = await getOptionalUser(request, env);
+				if (auth instanceof Response) return auth;
+				return getComments(env, reportId, auth);
+			}
+			if (request.method === 'POST') {
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				return createComment(request, env, reportId, auth);
+			}
+			return Response.json({ error: 'Method not allowed' }, { status: 405 });
+		}
+		const commentMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/comments\/(\d+)$/);
+		if (commentMatch) {
+			if (request.method !== 'DELETE') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+			const auth = await requireUser(request, env);
+			if (auth instanceof Response) return auth;
+			return deleteComment(env, Number(commentMatch[1]), Number(commentMatch[2]), auth);
 		}
 			const mediaMatch = url.pathname.match(/^\/api\/media\/(.+)$/);
 			if (mediaMatch) {

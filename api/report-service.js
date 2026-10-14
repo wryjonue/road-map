@@ -2,6 +2,7 @@ import { LocationResolutionError, resolveRoadLocation } from './location-service
 import { computeHotspots } from './clustering.js';
 import { calculateRoute } from './routing-service.js';
 import { createNotification } from './notification-service.js';
+import { insertSystemComment } from './comment-service.js';
 
 const MAX_PAGE_SIZE = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -243,13 +244,18 @@ export async function getHotspots(env, url) {
 	return json(geojson);
 }
 
-export async function getReport(env, id, status = 200, auth = null) {
-	// Managers can view any report (including archived/deleted) via direct ID.
-	// Everyone else: archived (rejected or deleted) reports are invisible (404).
+// Shared visibility rules for a single report: managers see everything;
+// everyone else gets null for archived (rejected/deleted) or others' pending reports.
+export async function loadAccessibleReport(env, id, auth = null) {
 	const report = canManageReports(auth) ? await findReportAny(env, id) : await findReport(env, id);
+	if (!report) return null;
+	if (isArchived(report) && !canManageReports(auth)) return null;
+	if (report.status === 'Pending' && !canReadPending({ status: report.status, author_id: report.authorId }, auth)) return null;
+	return report;
+}
+export async function getReport(env, id, status = 200, auth = null) {
+	const report = await loadAccessibleReport(env, id, auth);
 	if (!report) return errorResponse('Report not found', 404);
-	if (isArchived(report) && !canManageReports(auth)) return errorResponse('Report not found', 404);
-	if (report.status === 'Pending' && !canReadPending({ status: report.status, author_id: report.authorId }, auth)) return errorResponse('Report not found', 404);
 	return json(report, status);
 }
 export async function approveReport(env, id, auth) {
@@ -261,6 +267,8 @@ export async function approveReport(env, id, auth) {
 	const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Open', updated_at = ? WHERE id = ? AND status = 'Pending' AND deleted_at IS NULL").bind(new Date().toISOString(), id).run();
 	if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
 	await createNotification(env, { userId: report.author_id, type: 'report_approved', reportId: id, actorId: auth.userId, message: 'Your report was approved and is now visible to the community.' });
+	const actor = getAuthorName({}, auth);
+	await insertSystemComment(env, id, `Report approved${actor ? ` by ${actor}` : ''} and is now visible to the community.`);
 	return getReport(env, id, 200, auth);
 }
 export async function rejectReport(env, id, auth) {
@@ -300,6 +308,8 @@ export async function resolveReport(env, id, auth) {
 		const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Resolved', updated_at = ?, resolved_at = ?, resolved_by = ? WHERE id = ? AND status NOT IN ('Pending', 'Resolved') AND deleted_at IS NULL").bind(resolvedAt, resolvedAt, auth.userId, id).run();
 		if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
 		await createNotification(env, { userId: report.author_id, type: 'report_resolved', reportId: id, actorId: auth.userId, message: 'Your report was marked as resolved.' });
+		const actor = getAuthorName({}, auth);
+		await insertSystemComment(env, id, `This report was marked as resolved${actor ? ` by ${actor}` : ''}.`);
 	}
 	return getReport(env, id, 200, auth);
 }

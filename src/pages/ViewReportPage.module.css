@@ -390,7 +390,7 @@
 	color: var(--text);
 }
 
-.commentsPlaceholder {
+.commentsEmpty {
 	padding: 28px;
 	text-align: center;
 	background: var(--bg-app);
@@ -399,8 +399,171 @@
 	font-size: 0.9rem;
 }
 
-.commentsPlaceholder p {
+.commentsEmpty p {
 	margin: 0;
+}
+
+.commentForm {
+	display: grid;
+	gap: 8px;
+	margin-bottom: 16px;
+}
+
+.commentTextarea {
+	width: 100%;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--bg-app);
+	font: inherit;
+	font-size: 0.92rem;
+	color: var(--text);
+	resize: vertical;
+	min-height: 72px;
+}
+
+.commentTextarea:focus {
+	outline: 2px solid var(--primary);
+	outline-offset: 1px;
+	border-color: var(--primary);
+}
+
+.commentTextarea:disabled {
+	opacity: 0.65;
+}
+
+.commentFormActions {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.commentList {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 10px;
+}
+
+.commentItem {
+	display: flex;
+	gap: 12px;
+	padding: 12px;
+	background: var(--bg-app);
+	border-radius: var(--radius-sm);
+	min-width: 0;
+}
+
+
+
+.commentAvatar {
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	background: var(--primary);
+	color: #fff;
+	display: grid;
+	place-items: center;
+	font-weight: 700;
+	font-size: 0.72rem;
+	flex-shrink: 0;
+	overflow: hidden;
+}
+
+.commentAvatar img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: inherit;
+}
+
+.systemAvatar {
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	background: rgba(249, 115, 22, 0.16);
+	color: var(--primary-dark);
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+}
+
+.systemAvatar svg {
+	width: 16px;
+	height: 16px;
+}
+
+.commentContent {
+	flex: 1;
+	min-width: 0;
+	display: grid;
+	gap: 4px;
+}
+
+.commentHeader {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.commentAuthor {
+	font-weight: 600;
+	font-size: 0.9rem;
+	color: var(--text);
+}
+
+.systemTag {
+	padding: 2px 8px;
+	background: rgba(249, 115, 22, 0.16);
+	color: var(--primary-dark);
+	border-radius: 9999px;
+	font-size: 0.66rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.commentTime {
+	font-size: 0.78rem;
+	color: var(--text-muted);
+}
+
+.commentDeleteBtn {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 4px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.commentDeleteBtn:hover:not(:disabled) {
+	color: #b91c1c;
+	background: rgba(185, 28, 28, 0.08);
+}
+
+.commentDeleteBtn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.commentDeleteBtn svg {
+	width: 15px;
+	height: 15px;
+}
+
+.commentBody {
+	margin: 0;
+	font-size: 0.92rem;
+	line-height: 1.5;
+	color: var(--text);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 /* States */
