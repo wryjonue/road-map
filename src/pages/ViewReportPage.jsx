@@ -76,6 +76,10 @@ export default function ViewReportPage() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState('');
 	const [isMutating, setIsMutating] = useState(false);
+	const [voteCount, setVoteCount] = useState(0);
+	const [hasVoted, setHasVoted] = useState(false);
+	const [isVoting, setIsVoting] = useState(false);
+	const voteSyncedRef = useRef(false);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const userLocationRef = useRef(null);
 	const dropdownRef = useRef(null);
@@ -98,7 +102,10 @@ export default function ViewReportPage() {
 				});
 				const data = await response.json();
 				if (!response.ok) throw new Error(data.error || 'Unable to load report');
-				if (!controller.signal.aborted) setReport(data);
+				if (!controller.signal.aborted) {
+					setReport(data);
+					setVoteCount(data.voteCount ?? 0);
+				}
 			} catch (loadError) {
 				if (loadError.name !== 'AbortError') setError(loadError.message || 'Unable to load report');
 			} finally {
@@ -106,6 +113,31 @@ export default function ViewReportPage() {
 			}
 		};
 		void loadReport();
+		return () => controller.abort();
+	}, [id, getToken, isLoaded, isSignedIn]);
+
+	// Load the signed-in user's vote status once per report id.
+	useEffect(() => {
+		if (!isLoaded) return undefined;
+		voteSyncedRef.current = false;
+		const controller = new AbortController();
+		const loadVoteStatus = async () => {
+			try {
+				const token = isSignedIn ? await getToken() : null;
+				const response = await fetch(`/api/reports/${id}/vote`, {
+					headers: token ? { Authorization: `Bearer ${token}` } : {},
+					signal: controller.signal,
+				});
+				const data = await response.json();
+				if (!response.ok || controller.signal.aborted) return;
+				voteSyncedRef.current = true;
+				setVoteCount(data.voteCount ?? 0);
+				setHasVoted(Boolean(data.hasVoted));
+			} catch {
+				/* vote status is non-critical; count still shows from the report payload */
+			}
+		};
+		void loadVoteStatus();
 		return () => controller.abort();
 	}, [id, getToken, isLoaded, isSignedIn]);
 
@@ -248,6 +280,38 @@ export default function ViewReportPage() {
 		}
 	};
 
+	const handleVote = async () => {
+		if (isVoting) return;
+		if (!isSignedIn) {
+			setError('Sign in to vote on reports.');
+			return;
+		}
+		const prevCount = voteCount;
+		const prevHasVoted = hasVoted;
+		setVoteCount((count) => (prevHasVoted ? Math.max(0, count - 1) : count + 1));
+		setHasVoted(!prevHasVoted);
+		setIsVoting(true);
+		setError('');
+		try {
+			const token = await getToken();
+			if (!token) throw new Error('Sign in to vote on reports.');
+			const response = await fetch(`/api/reports/${id}/vote`, {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${token}` },
+			});
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) throw new Error(data.error || 'Unable to update vote');
+			setVoteCount(data.voteCount ?? 0);
+			setHasVoted(Boolean(data.hasVoted));
+		} catch (voteError) {
+			setVoteCount(prevCount);
+			setHasVoted(prevHasVoted);
+			setError(voteError.message || 'Unable to update vote');
+		} finally {
+			setIsVoting(false);
+		}
+	};
+
 	const deleteReport = async () => {
 		if (isMutating || !window.confirm('Delete this report? This action cannot be undone.')) return;
 		setIsMutating(true);
@@ -375,6 +439,17 @@ export default function ViewReportPage() {
 						<div className={styles.badgeRow}>
 							<span className={styles.categoryPill} style={{ '--category-color': CATEGORY_COLORS[report.category?.id] || '#5f6972' }}>{report.category?.name || 'Uncategorized'}</span>
 							<span className={`${styles.statusPill} ${styles[statusKey]}`}>{report.status}</span>
+							<button
+								type="button"
+								className={`${styles.voteBtn} ${hasVoted ? styles.voteBtnActive : ''}`}
+								aria-pressed={hasVoted}
+								aria-label={hasVoted ? 'Remove upvote' : 'Upvote report'}
+								disabled={isVoting}
+								onClick={() => void handleVote()}
+							>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
+								<span>{voteCount}</span>
+							</button>
 						</div>
 						<h1 className={styles.title}>{report.title}</h1>
 						<div className={styles.meta}>

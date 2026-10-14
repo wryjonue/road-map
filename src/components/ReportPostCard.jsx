@@ -67,7 +67,7 @@ function AuthorAvatar({ src, name }) {
 	return <div className={styles.avatar}>{src && !failed ? <img src={src} alt={`${name || 'Report author'} avatar`} onError={() => setFailed(true)} /> : initials}</div>;
 }
 
-export default function ReportPostCard({ id, title, poster, authorImageUrl, date, status, description, imageUrl, images, staticMapUrl, category, city, barangay, province }) {
+export default function ReportPostCard({ id, title, poster, authorImageUrl, date, status, description, imageUrl, images, staticMapUrl, category, city, barangay, province, voteCount }) {
 	const navigate = useNavigate();
 	const reportImageUrl = images?.[0]?.url || imageUrl;
 
@@ -145,6 +145,10 @@ export default function ReportPostCard({ id, title, poster, authorImageUrl, date
 				<div className={styles.badgeRow}>
 					{category && <span className={styles.categoryBadge} style={{ '--category-color': CATEGORY_COLORS[category.id] || '#5f6972' }}>{category.name}</span>}
 					<span className={`${styles.statusPill} ${styles[`status-${status.toLowerCase()}`]}`}>{status}</span>
+					<span className={styles.voteIndicator} aria-label={`${voteCount ?? 0} upvotes`}>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
+						{voteCount ?? 0}
+					</span>
 				</div>
 				<h3 className={styles.title}>{title}</h3>
 				<p className={styles.description}>{description}</p>
