@@ -1,5 +1,6 @@
 import { loadAccessibleReport } from './report-service.js';
 import { buildDisplayName } from './user-service.js';
+import { createNotification } from './notification-service.js';
 
 const MAX_COMMENT_LENGTH = 2000;
 
@@ -64,6 +65,27 @@ export async function createComment(request, env, reportId, auth) {
 
 	await env.road_map_db.prepare('UPDATE reports SET comment_count = comment_count + 1 WHERE id = ?').bind(reportId).run();
 	const saved = await env.road_map_db.prepare(`${COMMENT_SELECT} WHERE cm.id = ?`).bind(result.meta.last_row_id).first();
+
+	// Notify report author and prior non-system commenters (excluding self).
+	// Fire-and-forget; failures are logged but do not block the response.
+	try {
+		const actorName = buildDisplayName(auth.claims?.first_name, auth.claims?.last_name) || 'Someone';
+		const recipients = await env.road_map_db.prepare(
+			'SELECT DISTINCT author_id FROM comments WHERE report_id = ? AND is_system = 0 AND author_id != ? UNION SELECT author_id FROM reports WHERE id = ? AND author_id != ?',
+		).bind(reportId, auth.userId, reportId, auth.userId).all();
+		for (const row of recipients.results) {
+			await createNotification(env, {
+				userId: row.author_id,
+				type: 'comment_created',
+				reportId,
+				actorId: auth.userId,
+				message: `${actorName} commented on a report you're involved in.`,
+			});
+		}
+	} catch (err) {
+		console.error('[comment] failed to dispatch comment notifications:', String(err));
+	}
+
 	return json({ comment: saved ? toComment(saved) : null, commentCount: (report.commentCount ?? 0) + 1 }, 201);
 }
 

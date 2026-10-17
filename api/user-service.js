@@ -18,8 +18,8 @@ export function buildDisplayName(firstName, lastName) {
  * first_name/last_name fields. This helper splits `name` as a fallback.
  */
 function extractNames(source) {
-	let firstName = typeof source.first_name === 'string' ? source.first_name.trim() : null;
-	let lastName = typeof source.last_name === 'string' ? source.last_name.trim() : null;
+	let firstName = (typeof source.first_name === 'string' ? source.first_name : source.firstName)?.trim() || null;
+	let lastName = (typeof source.last_name === 'string' ? source.last_name : source.lastName)?.trim() || null;
 
 	if (!firstName && !lastName && typeof source.name === 'string') {
 		const parts = source.name.trim().split(/\s+/);
@@ -55,15 +55,31 @@ export async function upsertUserFromClaims(env, claims) {
 	const id = claims.sub;
 	const { firstName, lastName, imageUrl } = extractNames(claims);
 
+	// Diagnostic: log what the JWT actually contains for name fields.
+	console.info('[user-upsert] claims keys:', Object.keys(claims).filter((k) => /name|picture|image/i.test(k)), 'extracted:', { firstName, lastName, imageUrl });
+
+	// If JWT claims carry no profile data, only create the row if it doesn't exist yet.
+	// Never overwrite existing non-null values with nulls from empty claims.
+	if (!firstName && !lastName && !imageUrl) {
+		const existing = await getUserById(env, id);
+		if (existing) return;
+		await env.road_map_db.prepare(
+			'INSERT INTO users (id) VALUES (?)'
+		).bind(id).run();
+		return;
+	}
+
 	const existing = await getUserById(env, id);
 	if (existing) {
-		// Never resurrect a soft-deleted user via lazy upsert.
 		if (existing.deleted_at != null) return;
-		// Skip write if nothing changed.
-		if (existing.first_name === firstName && existing.last_name === lastName && existing.image_url === imageUrl) return;
+		// Only update fields that are non-null in claims; preserve existing values otherwise.
+		const fn = firstName ?? existing.first_name;
+		const ln = lastName ?? existing.last_name;
+		const img = imageUrl ?? existing.image_url;
+		if (fn === existing.first_name && ln === existing.last_name && img === existing.image_url) return;
 		await env.road_map_db.prepare(
 			'UPDATE users SET first_name = ?, last_name = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
-		).bind(firstName, lastName, imageUrl, id).run();
+		).bind(fn, ln, img, id).run();
 	} else {
 		await env.road_map_db.prepare(
 			'INSERT INTO users (id, first_name, last_name, image_url) VALUES (?, ?, ?, ?)'
