@@ -6,3 +6,6 @@ CLERK_AUTHORIZED_PARTIES=http://localhost:5173,http://127.0.0.1:5173
 # Set to true only for explicit local mock testing without Clerk sign-in.
 ALLOW_LOCAL_MOCK_AUTH=false
 ENVIRONMENT=development
+# CLERK_WEBHOOK_SECRET is intentionally absent for local dev.
+# Local webhook sync is out of scope; the endpoint returns 503 without this secret.
+# Set via `wrangler secret put CLERK_WEBHOOK_SECRET` in production only.

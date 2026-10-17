@@ -1,3 +1,5 @@
+import { buildDisplayName } from './user-service.js';
+
 export async function getDashboardMetrics(env) {
 	const { results } = await env.road_map_db.prepare(`
 		SELECT c.id AS category_id, c.name AS category_name,
@@ -34,10 +36,13 @@ export async function getPendingReports(env, auth, limit = 10) {
 	}
 	const safeLimit = Math.min(Math.max(Number.isInteger(limit) ? limit : 10, 1), 20);
 	const { results } = await env.road_map_db.prepare(`
-		SELECT r.id, r.title, r.description, r.author_name, r.status,
+		SELECT r.id, r.title, r.description, r.status,
 			r.barangay, r.city, r.province, r.resolved_address,
-			c.id AS category_id, c.name AS category_name
-		FROM reports r JOIN categories c ON c.id = r.category_id
+			c.id AS category_id, c.name AS category_name,
+			u.first_name AS author_first_name, u.last_name AS author_last_name
+		FROM reports r
+		JOIN categories c ON c.id = r.category_id
+		LEFT JOIN users u ON u.id = r.author_id AND u.deleted_at IS NULL
 		WHERE r.deleted_at IS NULL AND r.status = 'Pending'
 		ORDER BY r.created_at DESC, r.id DESC
 		LIMIT ?
@@ -46,7 +51,7 @@ export async function getPendingReports(env, auth, limit = 10) {
 		id: row.id,
 		title: row.title,
 		description: row.description,
-		poster: row.author_name || 'Community reporter',
+		poster: buildDisplayName(row.author_first_name, row.author_last_name) || 'Community reporter',
 		category: { id: row.category_id, name: row.category_name },
 		location: { barangay: row.barangay, city: row.city, province: row.province, resolvedAddress: row.resolved_address },
 	}));
@@ -60,10 +65,13 @@ export async function getArchivedReports(env, auth, limit = 10) {
 	}
 	const safeLimit = Math.min(Math.max(Number.isInteger(limit) ? limit : 10, 1), 20);
 	const { results } = await env.road_map_db.prepare(`
-		SELECT r.id, r.title, r.author_name, r.status, r.deleted_at, r.archived_at, r.updated_at,
+		SELECT r.id, r.title, r.status, r.deleted_at, r.archived_at, r.updated_at,
 			r.barangay, r.city, r.province, r.resolved_address,
-			c.id AS category_id, c.name AS category_name
-		FROM reports r JOIN categories c ON c.id = r.category_id
+			c.id AS category_id, c.name AS category_name,
+			u.first_name AS author_first_name, u.last_name AS author_last_name
+		FROM reports r
+		JOIN categories c ON c.id = r.category_id
+		LEFT JOIN users u ON u.id = r.author_id AND u.deleted_at IS NULL
 		WHERE (r.status = 'Rejected' OR r.deleted_at IS NOT NULL)
 		ORDER BY COALESCE(r.archived_at, r.deleted_at, r.updated_at) DESC, r.id DESC
 		LIMIT ?
@@ -71,7 +79,7 @@ export async function getArchivedReports(env, auth, limit = 10) {
 	const reports = results.map((row) => ({
 		id: row.id,
 		title: row.title,
-		poster: row.author_name || 'Community reporter',
+		poster: buildDisplayName(row.author_first_name, row.author_last_name) || 'Community reporter',
 		category: { id: row.category_id, name: row.category_name },
 		location: { barangay: row.barangay, city: row.city, province: row.province, resolvedAddress: row.resolved_address },
 		reason: row.deleted_at != null ? 'Deleted' : 'Rejected',

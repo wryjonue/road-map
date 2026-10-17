@@ -3,6 +3,7 @@ import { computeHotspots } from './clustering.js';
 import { calculateRoute } from './routing-service.js';
 import { createNotification } from './notification-service.js';
 import { insertSystemComment } from './comment-service.js';
+import { buildDisplayName } from './user-service.js';
 
 const MAX_PAGE_SIZE = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -11,12 +12,15 @@ const GEOAPIFY_TIMEOUT = 10000;
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 const MAP_REPORT_STATUSES = new Set(['Open', 'Resolved']);
 const REPORT_SELECT = `
-	SELECT r.id, r.title, r.description, r.author_id, r.author_name, r.author_image_url, r.status,
+	SELECT r.id, r.title, r.description, r.author_id, r.status,
 		r.image_url, r.static_map_url, r.barangay, r.city, r.province, r.resolved_address,
 		r.longitude, r.latitude, r.start_longitude, r.start_latitude, r.dest_longitude, r.dest_latitude,
 		r.route_polyline, r.vote_count, r.comment_count, r.created_at, r.updated_at,
-		r.static_map_r2_key, c.id AS category_id, c.name AS category_name, c.slug AS category_slug
-	FROM reports r JOIN categories c ON c.id = r.category_id
+		r.static_map_r2_key, c.id AS category_id, c.name AS category_name, c.slug AS category_slug,
+		u.first_name AS author_first_name, u.last_name AS author_last_name, u.image_url AS author_image_url
+	FROM reports r
+	JOIN categories c ON c.id = r.category_id
+	LEFT JOIN users u ON u.id = r.author_id AND u.deleted_at IS NULL
 `;
 
 function json(data, status = 200) { return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } }); }
@@ -25,27 +29,10 @@ function mediaUrl(key) { return `/api/media/${key.split('/').map(encodeURICompon
 function canManageReports(auth) { return auth?.role === 'authority' || auth?.role === 'admin'; }
 function canReadPending(report, auth) { return canManageReports(auth) || auth?.userId === report.author_id; }
 function isArchived(report) { return report?.status === 'Rejected' || report?.deleted_at != null; }
-function getAuthorName(body, auth) {
-	const verifiedName = [auth.claims?.first_name, auth.claims?.last_name]
-		.filter((part) => typeof part === 'string' && part.trim())
-		.join(' ')
-		.trim();
-	const suppliedName = typeof body.authorName === 'string' ? body.authorName.trim() : '';
-	return (verifiedName || suppliedName).slice(0, 160) || null;
-}
-function getAuthorImageUrl(body, auth) {
-	const imageUrl = typeof auth.claims?.picture === 'string' ? auth.claims.picture : body.authorImageUrl;
-	if (typeof imageUrl !== 'string' || !imageUrl.trim() || imageUrl.length > 2048) return null;
-	try {
-		const url = new URL(imageUrl);
-		return url.protocol === 'https:' ? url.href : null;
-	} catch {
-		return null;
-	}
-}
 function toReport(row, images = []) {
+	const authorName = buildDisplayName(row.author_first_name, row.author_last_name);
 	return {
-		id: row.id, title: row.title, description: row.description, authorId: row.author_id, authorName: row.author_name, authorImageUrl: row.author_image_url,
+		id: row.id, title: row.title, description: row.description, authorId: row.author_id, authorName, authorImageUrl: row.author_image_url,
 		category: { id: row.category_id, name: row.category_name, slug: row.category_slug }, status: row.status,
 		imageUrl: row.image_url ? mediaUrl(row.image_url) : null,
 		images: images.filter((image) => image.r2_key).map((image) => ({ id: image.id, url: mediaUrl(image.r2_key), fileName: image.file_name, contentType: image.content_type })),
@@ -165,12 +152,15 @@ export async function getMapReports(env, url) {
 		filterValues.push(status);
 	}
 	const mapQuery = `
-		SELECT r.id, r.title, r.description, r.author_id, r.author_name, r.author_image_url,
+		SELECT r.id, r.title, r.description, r.author_id,
 			r.status, r.barangay, r.city, r.province, r.resolved_address,
 			r.longitude, r.latitude, r.start_longitude, r.start_latitude, r.dest_longitude, r.dest_latitude,
 			r.route_polyline, r.created_at,
-			c.id AS category_id, c.name AS category_name, c.slug AS category_slug
-		FROM reports r JOIN categories c ON c.id = r.category_id
+			c.id AS category_id, c.name AS category_name, c.slug AS category_slug,
+			u.first_name AS author_first_name, u.last_name AS author_last_name, u.image_url AS author_image_url
+		FROM reports r
+		JOIN categories c ON c.id = r.category_id
+		LEFT JOIN users u ON u.id = r.author_id AND u.deleted_at IS NULL
 		WHERE r.deleted_at IS NULL AND r.status IN ('Open', 'Resolved')${filters}
 		ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`;
 	const countQuery = `SELECT COUNT(*) AS total FROM reports r WHERE r.deleted_at IS NULL AND r.status IN ('Open', 'Resolved')${filters}`;
@@ -184,7 +174,7 @@ export async function getMapReports(env, url) {
 		title: row.title,
 		description: row.description,
 		authorId: row.author_id,
-		authorName: row.author_name,
+		authorName: buildDisplayName(row.author_first_name, row.author_last_name),
 		authorImageUrl: row.author_image_url,
 		status: row.status,
 		category: { id: row.category_id, name: row.category_name, slug: row.category_slug },
@@ -267,7 +257,7 @@ export async function approveReport(env, id, auth) {
 	const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Open', updated_at = ? WHERE id = ? AND status = 'Pending' AND deleted_at IS NULL").bind(new Date().toISOString(), id).run();
 	if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
 	await createNotification(env, { userId: report.author_id, type: 'report_approved', reportId: id, actorId: auth.userId, message: 'Your report was approved and is now visible to the community.' });
-	const actor = getAuthorName({}, auth);
+	const actor = buildDisplayName(auth.claims?.first_name, auth.claims?.last_name);
 	await insertSystemComment(env, id, `Report approved${actor ? ` by ${actor}` : ''} and is now visible to the community.`);
 	return getReport(env, id, 200, auth);
 }
@@ -308,7 +298,7 @@ export async function resolveReport(env, id, auth) {
 		const result = await env.road_map_db.prepare("UPDATE reports SET status = 'Resolved', updated_at = ?, resolved_at = ?, resolved_by = ? WHERE id = ? AND status NOT IN ('Pending', 'Resolved') AND deleted_at IS NULL").bind(resolvedAt, resolvedAt, auth.userId, id).run();
 		if (!result.meta.changes) return errorResponse('Report status changed; reload and try again', 409);
 		await createNotification(env, { userId: report.author_id, type: 'report_resolved', reportId: id, actorId: auth.userId, message: 'Your report was marked as resolved.' });
-		const actor = getAuthorName({}, auth);
+		const actor = buildDisplayName(auth.claims?.first_name, auth.claims?.last_name);
 		await insertSystemComment(env, id, `This report was marked as resolved${actor ? ` by ${actor}` : ''}.`);
 	}
 	return getReport(env, id, 200, auth);
@@ -367,8 +357,6 @@ async function parseBody(request) {
 			title: formValue(form, 'title', ''),
 			description: formValue(form, 'description', ''),
 			authorId: formValue(form, 'authorId', ''),
-			authorName: formValue(form, 'authorName'),
-			authorImageUrl: formValue(form, 'authorImageUrl'),
 			categoryId: formValue(form, 'categoryId'),
 			status: formValue(form, 'status'),
 			imageUrl: null,
@@ -387,6 +375,9 @@ async function parseBody(request) {
 	}
 	return { ...(await request.json()), image: null };
 }
+
+
+
 function extension(contentType) { return ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' })[contentType] || 'bin'; }
 async function createStaticMap(env, reportId, longitude, latitude, routeGeometry, startLng, startLat, destLng, destLat) {
 	if (!env.GEOAPIFY_API_KEY) throw new Error('GEOAPIFY_API_KEY is not configured');
@@ -424,6 +415,9 @@ async function createStaticMap(env, reportId, longitude, latitude, routeGeometry
 	}
 	const key = `reports/${reportId}/static-map.png`; await env.ROAD_MAP_MEDIA.put(key, await response.arrayBuffer(), { httpMetadata: { contentType: response.headers.get('content-type') } }); return key;
 }
+
+
+
 export async function createReport(request, env, auth) {
 	const contentLength = Number(request.headers.get('Content-Length'));
 	if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_SIZE) return errorResponse('Request is too large');
@@ -462,9 +456,7 @@ export async function createReport(request, env, auth) {
 	if (image && image.size > MAX_IMAGE_SIZE) return errorResponse('image must be 5 MB or smaller');
 	let reportId; let imageKey; let staticMapKey;
 	try {
-		const authorName = getAuthorName(body, auth);
-		const authorImageUrl = getAuthorImageUrl(body, auth);
-		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, author_name, author_image_url, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude, start_longitude, start_latitude, dest_longitude, dest_latitude, route_polyline) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, authorName, authorImageUrl, categoryId, 'Pending', resolvedLocation.barangay || null, resolvedLocation.city || null, resolvedLocation.province, resolvedLocation.address, resolvedLocation.longitude, resolvedLocation.latitude, resolvedStart?.longitude ?? null, resolvedStart?.latitude ?? null, resolvedDest?.longitude ?? null, resolvedDest?.latitude ?? null, routePolyline).run();
+		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude, start_longitude, start_latitude, dest_longitude, dest_latitude, route_polyline) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, categoryId, 'Pending', resolvedLocation.barangay || null, resolvedLocation.city || null, resolvedLocation.province, resolvedLocation.address, resolvedLocation.longitude, resolvedLocation.latitude, resolvedStart?.longitude ?? null, resolvedStart?.latitude ?? null, resolvedDest?.longitude ?? null, resolvedDest?.latitude ?? null, routePolyline).run();
 		reportId = result.meta.last_row_id;
 		if (image) { imageKey = `reports/${reportId}/images/${crypto.randomUUID()}.${extension(image.type)}`; await env.ROAD_MAP_MEDIA.put(imageKey, image.stream(), { httpMetadata: { contentType: image.type }, customMetadata: { fileName: image.name || 'upload' } }); await env.road_map_db.prepare('INSERT INTO report_images (report_id, image_url, r2_key, content_type, file_name, file_size) VALUES (?, ?, ?, ?, ?, ?)').bind(reportId, imageKey, imageKey, image.type, image.name || null, image.size).run(); }
 		const parsedRoute = routePolyline ? JSON.parse(routePolyline) : null;
@@ -474,6 +466,8 @@ export async function createReport(request, env, auth) {
 		if (imageKey) await env.ROAD_MAP_MEDIA.delete(imageKey).catch(() => {}); if (staticMapKey) await env.ROAD_MAP_MEDIA.delete(staticMapKey).catch(() => {}); if (reportId) await env.road_map_db.prepare('DELETE FROM reports WHERE id = ?').bind(reportId).run().catch(() => {}); throw error;
 	}
 }
+
+
 export async function getMedia(request, env, key, auth = null) {
 	if (!key || key.includes('..') || key.startsWith('/') || key.includes('\\')) return errorResponse('Invalid media key', 400);
 	const report = await env.road_map_db.prepare('SELECT r.status, r.author_id FROM reports r WHERE r.deleted_at IS NULL AND (r.static_map_r2_key = ? OR r.image_url = ? OR EXISTS (SELECT 1 FROM report_images ri WHERE ri.report_id = r.id AND ri.r2_key = ?)) LIMIT 1').bind(key, key, key).first();

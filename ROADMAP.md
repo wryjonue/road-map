@@ -34,11 +34,17 @@ Still incomplete: map report pins, persistent ticket records/API, ticket-to-repo
 - `[x]` Log out
 - `[x]` Email verification
 
-### User Profile - Reported 70%
+### User Profile - Complete ✅
 
 - `[x]` Basic profile
 - `[x]` Edit profile
 - `[x]` Read role from Clerk session claims; roles are assigned only through the Clerk Dashboard
+- `[x]` D1 `users` table created (migration `015`) for canonical user profiles synced from Clerk
+- `[x]` Webhook endpoint (`/api/webhooks/clerk`) handles `user.updated` and `user.deleted` events
+- `[x]` Lazy upsert from verified JWT claims on first authenticated request
+- `[x]` Production backfill of existing authors via `scripts/backfill-users.mjs`
+- `[x]` API queries migrated from denormalized `author_name`/`author_image_url` to `LEFT JOIN users`
+- `[x]` Physical removal of deprecated author columns from `reports` and `comments` (migration `017`)
 
 ### Report Feed
 

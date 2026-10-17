@@ -6,13 +6,14 @@ import categories from '../src/data/categories.js';
 import { resolveRoadLocation } from './location-service.js';
 import { approveReport, createReport, deletePendingReport, getMapReports, getMedia, getReport, listReports, rejectReport, resolveReport } from './report-service.js';
 
-function reportRow({ id, status, authorId = 'reporter-1', authorName = null, authorImageUrl = null, mapKey = null, imageKey = null, deletedAt = null }) {
+function reportRow({ id, status, authorId = 'reporter-1', authorFirstName = null, authorLastName = null, authorImageUrl = null, mapKey = null, imageKey = null, deletedAt = null }) {
 	return {
 		id,
 		title: `Report ${id}`,
 		description: 'Road hazard',
 		author_id: authorId,
-		author_name: authorName,
+		author_first_name: authorFirstName,
+		author_last_name: authorLastName,
 		author_image_url: authorImageUrl,
 		status,
 		image_url: null,
@@ -68,7 +69,7 @@ class FakeDatabase {
 					return { results: [{ total: rows.length }] };
 				}
 				if (sql.includes('FROM report_images')) return { results: [] };
-				if (sql.includes('FROM reports r JOIN categories c')) {
+					if (sql.includes('FROM reports r') && (sql.includes('JOIN categories c') || sql.includes('LEFT JOIN users'))) {
 					let rows = database.rows.filter((row) => row.deleted_at === null);
 					if (sql.includes("r.status IN ('Open', 'Resolved')")) rows = rows.filter((row) => row.status === 'Open' || row.status === 'Resolved');
 					let filterIndex = 0;
@@ -115,16 +116,17 @@ class FakeDatabase {
 			async run() {
 				database.queries.push({ sql, values });
 				if (sql.startsWith('INSERT INTO reports')) {
-					const row = reportRow({ id: 1, status: values[6], authorId: values[2], authorName: values[3], authorImageUrl: values[4] });
-					row.barangay = values[7];
-					row.city = values[8];
-					row.province = values[9];
-					row.resolved_address = values[10];
-					row.longitude = values[11];
-					row.latitude = values[12];
-					database.rows.push(row);
-					return { meta: { last_row_id: row.id, changes: 1 } };
-				}
+						// New column order: title(0), description(1), author_id(2), category_id(3), status(4), barangay(5), city(6), province(7), resolved_address(8), longitude(9), latitude(10)...
+						const row = reportRow({ id: 1, status: values[4], authorId: values[2] });
+						row.barangay = values[5];
+						row.city = values[6];
+						row.province = values[7];
+						row.resolved_address = values[8];
+						row.longitude = values[9];
+						row.latitude = values[10];
+						database.rows.push(row);
+						return { meta: { last_row_id: row.id, changes: 1 } };
+					}
 				if (sql.startsWith('UPDATE reports SET static_map_r2_key')) {
 					const row = database.rows.find((item) => item.id === values[2]);
 					row.static_map_r2_key = values[0];
@@ -161,7 +163,13 @@ class FakeDatabase {
 					row.updated_at = values[1];
 					return { meta: { changes: 1 } };
 				}
-				throw new Error(`Unexpected query: ${sql}`);
+					if (sql.startsWith('INSERT INTO comments')) {
+						return { meta: { last_row_id: 1, changes: 1 } };
+					}
+					if (sql.startsWith('UPDATE reports SET comment_count')) {
+						return { meta: { changes: 1 } };
+					}
+					throw new Error(`Unexpected query: ${sql}`);
 			},
 		};
 		return statement;
@@ -425,8 +433,6 @@ test('report creation forces Pending and uses the verified author ID', async () 
 	form.set('title', 'Blocked road');
 	form.set('description', 'A lane is blocked');
 	form.set('authorId', 'forged-author');
-	form.set('authorName', 'Forged Name');
-	form.set('authorImageUrl', 'https://img.clerk.com/forged-avatar.jpg');
 	form.set('categoryId', '1');
 	form.set('status', 'Resolved');
 	form.set('province', 'Bataan');
@@ -440,11 +446,14 @@ test('report creation forces Pending and uses the verified author ID', async () 
 		assert.equal(response.status, 201);
 		assert.equal(data.status, 'Pending');
 		assert.equal(data.authorId, 'verified-author');
-		assert.equal(data.authorName, 'Jane Reporter');
-		assert.equal(data.authorImageUrl, 'https://img.clerk.com/verified-avatar.jpg');
+		// Author name/image are now resolved via LEFT JOIN users, not stored on the report row.
+		// The FakeDatabase does not simulate the users table join, so these will be null.
+		assert.equal(data.authorName, null);
+		assert.equal(data.authorImageUrl, null);
 		assert.equal(database.rows[0].status, 'Pending');
-		assert.equal(database.rows[0].author_name, 'Jane Reporter');
-		assert.equal(database.rows[0].author_image_url, 'https://img.clerk.com/verified-avatar.jpg');
+		// Verify denormalized columns are no longer written.
+		assert.equal(database.rows[0].author_first_name, undefined);
+		assert.equal(database.rows[0].author_image_url, undefined);
 		assert.equal(database.rows[0].longitude, 120.5001);
 		assert.equal(database.rows[0].latitude, 14.5001);
 	} finally {

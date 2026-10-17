@@ -1,4 +1,5 @@
 import { verifyToken } from '@clerk/backend';
+import { upsertUserFromClaims } from './user-service.js';
 
 const ROLES = new Set(['user', 'authority', 'admin']);
 
@@ -40,6 +41,8 @@ async function getUser(request, env, allowAnonymous) {
 			...(authorizedParties?.length ? { authorizedParties } : {}),
 		});
 		if (!claims.sub) return unauthorized('Authenticated user ID is missing');
+		// Lazy upsert: ensure a users row exists on first authenticated request (fire-and-forget).
+		upsertUserFromClaims(env, claims).catch((err) => console.error('[auth] lazy upsert failed:', err));
 		return { userId: claims.sub, role: normalizeRole(claims.role), claims };
 	} catch {
 		return unauthorized('Invalid authentication token');

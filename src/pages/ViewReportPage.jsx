@@ -369,8 +369,6 @@ export default function ViewReportPage() {
 				headers: { Authorization:  `Bearer ${token}`, 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					body: text,
-					authorName: [user?.firstName, user?.lastName].filter(Boolean).join(' '),
-					authorImageUrl: user?.imageUrl || '',
 				}),
 			});
 			const data = await response.json();

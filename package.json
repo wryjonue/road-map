@@ -7,10 +7,11 @@
 		"dev": "vite",
 		"build": "vite build",
 		"lint": "oxlint",
-		"test": "node --test api/report-access.test.js",
+		"test": "node --test api/*.test.js",
 		"preview": "npm run build && vite preview",
 		"deploy": "npm run build && wrangler deploy",
-		"migrations": "npx wrangler d1 migrations apply road-map-db --remote"
+		"migrations": "npx wrangler d1 migrations apply road-map-db --remote",
+		"backfill:users": "node scripts/backfill-users.mjs"
 	},
 	"dependencies": {
 		"@clerk/backend": "^3.17.1",

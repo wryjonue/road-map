@@ -66,7 +66,8 @@ Place new route-level UI in `src/pages/`, reusable UI in `src/components/`, and 
 - Keep report API errors in the JSON shape `{ "error": "message" }` with an appropriate HTTP status.
 - Enforce the report pagination maximum of 10 records per request.
 - Exclude soft-deleted reports from public listing and detail responses.
-- Treat `author_id` as the stable Clerk identity; do not use display names as identity.
+- Treat `author_id` as the stable Clerk identity; do not use display names as identity. The Clerk user ID is the canonical user key across all tables.
+- The `users` table stores canonical user profiles (`id`, `first_name`, `last_name`, `image_url`, timestamps, `deleted_at`). Author display names and images must be resolved via `LEFT JOIN users` rather than denormalized columns on `reports` or `comments`. Soft-deleted users (`deleted_at IS NOT NULL`) should be excluded from joins.
 - Vector embeddings are intentionally ignored for now and should not be generated or exposed unless explicitly requested.
 - Report images and static maps belong in R2; D1 should store keys, URLs, and metadata rather than binary content.
 - Keep R2 buckets private and serve media through the validated Worker media route.
@@ -116,3 +117,31 @@ npx wrangler secret put CLERK_JWT_KEY
 ```
 
 Use `--remote` only when explicitly authorized. Never print or commit secret values. Before finishing a change, run at least `npm run lint` and `npm run build`, plus focused D1/API checks when backend behavior changes.
+
+### User Backfill Runbook
+
+After deploying migration `015_users.sql` to production, populate the `users` table for existing authors:
+
+1. Ensure `CLERK_SECRET_KEY` is available in your shell environment or `.dev.vars` (never commit it).
+2. Dry-run first to verify counts: `npm run backfill:users`
+3. Apply with explicit authorization: `npm run backfill:users -- --execute`
+4. Reconcile by running the dry-run again — it should report zero new inserts.
+
+The script uses `INSERT OR IGNORE` so it is fully idempotent. Authors whose Clerk accounts no longer exist are intentionally skipped.
+
+### Author ID Foreign Key Decision
+
+Physical foreign keys from `reports.author_id` and `comments.author_id` to `users.id` are intentionally **not** added. Rationale:
+
+- SQLite cannot add a FK to an existing table without a full create-copy-drop-rename rebuild.
+- D1/workerd enforces FKs during `DROP TABLE` even with `PRAGMA foreign_keys = OFF` (documented in migration `012_archive_and_drop_closed.sql`), making a `reports` rebuild unsafe locally.
+- A rebuild of `reports` would cascade to `report_images`, `report_votes`, `comments`, and `notifications` due to their FK dependencies.
+- Soft-deleted users (`deleted_at IS NOT NULL`) and mock auth (`mock-user-local`) have no `users` row, which would violate a physical FK.
+- The existing indexes `idx_reports_author_id` and `idx_comments_author_id` provide query performance.
+- Referential integrity is enforced at the application layer: all user-facing queries use `LEFT JOIN users u ON u.id = r.author_id AND u.deleted_at IS NULL`.
+
+This matches the precedent established by `report_votes.user_id`, `notifications.user_id`, and `chat_messages.user_id` (migration `013_chat_history.sql`).
+
+### Denormalized Author Columns — Removed
+
+The `author_name` and `author_image_url` columns on `reports` and `comments` have been physically removed (migration `017_drop_denormalized_author_columns.sql`). All author display data is now resolved exclusively via `LEFT JOIN users u ON u.id = r.author_id AND u.deleted_at IS NULL`. Do not reference these columns in any query, INSERT, or UPDATE statement.

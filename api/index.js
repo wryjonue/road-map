@@ -7,6 +7,7 @@ import { chatWithGemini, MAX_MESSAGE_LENGTH } from './ai-service.js';
 import { getRecentHistory, saveMessage, clearHistory } from './chat-service.js';
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
 import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from './notification-service.js';
+import { handleClerkWebhook } from './clerk-webhook.js';
 
 // Durable Object classes must be exported from the Worker entry so Wrangler can bind them.
 export { NotificationHub } from './durable-objects/notification-hub.js';
@@ -16,6 +17,10 @@ export default {
 	async fetch(request, env) {
 		const url = new URL(request.url);
 		try {
+			// Clerk webhook endpoint — no auth required, signature verified internally.
+			if (url.pathname === '/api/webhooks/clerk') {
+				return handleClerkWebhook(request, env);
+			}
 			// WebSocket upgrade: per-user notification hub.
 			if (url.pathname === '/ws/notifications') {
 				// Browser WebSocket cannot send Authorization headers; accept token via query param.
