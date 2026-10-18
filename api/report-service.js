@@ -4,6 +4,7 @@ import { calculateRoute } from './routing-service.js';
 import { createNotification } from './notification-service.js';
 import { insertSystemComment } from './comment-service.js';
 import { buildDisplayName } from './user-service.js';
+import { moderateReport } from './ai-service.js';
 
 const MAX_PAGE_SIZE = 10;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -458,9 +459,110 @@ export async function createReport(request, env, auth) {
 	try {
 		const result = await env.road_map_db.prepare('INSERT INTO reports (title, description, author_id, category_id, status, image_url, barangay, city, province, resolved_address, longitude, latitude, start_longitude, start_latitude, dest_longitude, dest_latitude, route_polyline) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(title, description, auth.userId, categoryId, 'Pending', resolvedLocation.barangay || null, resolvedLocation.city || null, resolvedLocation.province, resolvedLocation.address, resolvedLocation.longitude, resolvedLocation.latitude, resolvedStart?.longitude ?? null, resolvedStart?.latitude ?? null, resolvedDest?.longitude ?? null, resolvedDest?.latitude ?? null, routePolyline).run();
 		reportId = result.meta.last_row_id;
-		if (image) { imageKey = `reports/${reportId}/images/${crypto.randomUUID()}.${extension(image.type)}`; await env.ROAD_MAP_MEDIA.put(imageKey, image.stream(), { httpMetadata: { contentType: image.type }, customMetadata: { fileName: image.name || 'upload' } }); await env.road_map_db.prepare('INSERT INTO report_images (report_id, image_url, r2_key, content_type, file_name, file_size) VALUES (?, ?, ?, ?, ?, ?)').bind(reportId, imageKey, imageKey, image.type, image.name || null, image.size).run(); }
+		if (image) { 
+			console.log('[report] Processing uploaded image:', { name: image.name, type: image.type, size: image.size });
+			imageKey = `reports/${reportId}/images/${crypto.randomUUID()}.${extension(image.type)}`; 
+			await env.ROAD_MAP_MEDIA.put(imageKey, image.stream(), { httpMetadata: { contentType: image.type }, customMetadata: { fileName: image.name || 'upload' } }); 
+			await env.road_map_db.prepare('INSERT INTO report_images (report_id, image_url, r2_key, content_type, file_name, file_size) VALUES (?, ?, ?, ?, ?, ?)').bind(reportId, imageKey, imageKey, image.type, image.name || null, image.size).run(); 
+			console.log('[report] Image stored with R2 key:', imageKey);
+		} else {
+			console.log('[report] No image uploaded for report:', reportId);
+		}
 		const parsedRoute = routePolyline ? JSON.parse(routePolyline) : null;
 		staticMapKey = await createStaticMap(env, reportId, longitude, latitude, parsedRoute, resolvedStart?.longitude ?? longitude, resolvedStart?.latitude ?? latitude, resolvedDest?.longitude ?? longitude, resolvedDest?.latitude ?? latitude); await env.road_map_db.prepare('UPDATE reports SET static_map_r2_key = ?, static_map_url = ? WHERE id = ?').bind(staticMapKey, mediaUrl(staticMapKey), reportId).run();
+
+		// AI moderation: fire-and-forget after successful creation.
+		// Failures leave the report as Pending for manual review.
+		// Ensure AI moderation runs even if client disconnects
+		const moderationPromise = (async () => {
+			console.log('[report] Starting AI moderation for report ID:', reportId, 'with imageKey:', imageKey);
+			try {
+				const categoryRow = await env.road_map_db.prepare('SELECT name FROM categories WHERE id = ?').bind(categoryId).first();
+				console.log('[report] Category lookup result:', categoryRow);
+				const moderation = await moderateReport(env, {
+					title,
+				description,
+				category: categoryRow?.name || 'Unknown',
+				imageR2Key: imageKey || null,
+				});
+				console.log('[report] ModerateReport returned:', moderation);
+				if (!moderation) {
+					console.warn('[report] Moderation returned null - skipping AI processing');
+					return;
+				}
+
+			const now = new Date().toISOString();
+			await env.road_map_db.prepare(
+				'UPDATE reports SET ai_verdict = ?, ai_confidence = ?, ai_reason = ?, ai_reviewed_at = ? WHERE id = ?',
+			).bind(moderation.verdict, moderation.confidence, moderation.reason, now, reportId).run();
+			console.log('[report] Updated AI moderation metadata for report:', reportId);
+
+			if (moderation.verdict === 'approve' && !moderation.needsManualReview) {
+				console.log('[report] Auto-approving report:', reportId, 'confidence:', moderation.confidence);
+				await env.road_map_db.prepare("UPDATE reports SET status = 'Open', updated_at = ? WHERE id = ? AND status = 'Pending'").bind(now, reportId).run();
+				await createNotification(env, { userId: auth.userId, type: 'report_auto_approved', reportId, actorId: 'ai-system', message: 'Your report was auto-approved by AI and is now visible to the community.' });
+				await insertSystemComment(env, reportId, `AI auto-approved this report (confidence: ${Math.round(moderation.confidence * 100)}%).`);
+			} else if (moderation.verdict === 'reject' && !moderation.needsManualReview) {
+				console.log('[report] Auto-rejecting report:', reportId, 'confidence:', moderation.confidence, 'reason:', moderation.reason);
+				await env.road_map_db.prepare("UPDATE reports SET status = 'Rejected', updated_at = ?, archived_at = ? WHERE id = ? AND status = 'Pending'").bind(now, now, reportId).run();
+				await createNotification(env, { userId: auth.userId, type: 'report_auto_rejected', reportId, actorId: 'ai-system', message: `Your report was auto-rejected by AI. Reason: ${moderation.reason}` });
+				await insertSystemComment(env, reportId, `AI auto-rejected this report (confidence: ${Math.round(moderation.confidence * 100)}%). Reason: ${moderation.reason}`);
+			} else {
+				console.log('[report] Manual review required for report:', reportId, 'confidence:', moderation.confidence, 'needsManualReview:', moderation.needsManualReview);
+				// Needs manual review — stays Pending, notify admins.
+				await createNotification(env, { userId: auth.userId, type: 'report_needs_review', reportId, actorId: 'ai-system', message: `Your report requires manual review. AI confidence: ${Math.round(moderation.confidence * 100)}%.` });
+			}
+			console.log('[report] AI moderation completed for report:', reportId);
+		} catch (err) {
+			console.error('[report] AI moderation failed for report', reportId, 'Error:', String(err), 'Stack:', err?.stack);
+		}
+		})();
+
+		// Send webhook to Render AI service for moderation
+		(async () => {
+			try {
+				console.log('[report] Sending moderation webhook to Render for report:', reportId);
+					
+				// Get category name
+				const categoryRow = await env.road_map_db.prepare('SELECT name FROM categories WHERE id = ?').bind(categoryId).first();
+					
+				// Prepare webhook payload
+				const webhookPayload = {
+					reportId,
+					title,
+					description,
+					category: categoryRow?.name || 'Unknown',
+					imageKey: imageKey || null,
+					authorId: auth.userId,
+					timestamp: new Date().toISOString()
+				};
+					
+				// Generate signature (simplified for now)
+				const signature = crypto.createHmac('sha256', env.WEBHOOK_SECRET || 'fallback-secret').update(JSON.stringify(webhookPayload)).digest('hex');
+					
+				// Send to Render AI service
+				const response = await fetch(env.RENDER_AI_SERVICE_URL, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-Webhook-Signature': signature
+					},
+					body: JSON.stringify(webhookPayload)
+				});
+					
+				if (!response.ok) {
+					console.error('[report] Failed to send moderation webhook:', response.status, await response.text());
+				} else {
+					console.log('[report] Moderation webhook sent successfully to Render');
+				}
+			} catch (err) {
+				console.error('[report] Error sending moderation webhook:', err);
+			}
+		})();
+
+		// Return immediately to client
+		return;
+
 		return getReport(env, reportId, 201, auth);
 	} catch (error) {
 		if (imageKey) await env.ROAD_MAP_MEDIA.delete(imageKey).catch(() => {}); if (staticMapKey) await env.ROAD_MAP_MEDIA.delete(staticMapKey).catch(() => {}); if (reportId) await env.road_map_db.prepare('DELETE FROM reports WHERE id = ?').bind(reportId).run().catch(() => {}); throw error;

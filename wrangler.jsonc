@@ -10,7 +10,8 @@
 	"vars": {
 		"CLERK_AUTHORIZED_PARTIES": "https://roadmap.vieryn.party",
 		"ALLOW_LOCAL_MOCK_AUTH": "false",
-		"VITE_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsucm9hZG1hcC52aWVyeW4ucGFydHkk"
+		"VITE_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsucm9hZG1hcC52aWVyeW4ucGFydHkk",
+		"RENDER_AI_SERVICE_URL": "https://your-render-app-url/render-ai-service/moderate"
 	},
 	"assets": {
 		"directory": "dist/client",

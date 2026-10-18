@@ -27,34 +27,31 @@ Still incomplete: map report pins, persistent ticket records/API, ticket-to-repo
 
 ## Current Status
 
-### Authentication - Reported 100%
+### Authentication - 100%
 
 - `[x]` Log in
 - `[x]` Register
 - `[x]` Log out
 - `[x]` Email verification
 
-### User Profile - Complete ✅
+### User Profile - 100%
 
 - `[x]` Basic profile
 - `[x]` Edit profile
-- `[x]` Read role from Clerk session claims; roles are assigned only through the Clerk Dashboard
-- `[x]` D1 `users` table created (migration `015`) for canonical user profiles synced from Clerk
-- `[x]` Webhook endpoint (`/api/webhooks/clerk`) handles `user.updated` and `user.deleted` events
-- `[x]` Lazy upsert from verified JWT claims on first authenticated request
-- `[x]` Production backfill of existing authors via `scripts/backfill-users.mjs`
-- `[x]` API queries migrated from denormalized `author_name`/`author_image_url` to `LEFT JOIN users`
-- `[x]` Physical removal of deprecated author columns from `reports` and `comments` (migration `017`)
+- `[x]` Role-Based Access Control - High Priority
+
 
 ### Report Feed
 
 - `[x]` Report post cards
 - `[x]` Authority/admin can resolve a report from the feed; Worker validates the role and records resolution metadata
-- `[ ]` Filter reports
-- `[ ]` Comments - Lowest priority
-- `[ ]` Upvote reports
+- `[x]` Filter reports
+- `[x]` Comments
+- `[x]` Upvote reports
+- `[x]` Upvote reports
+- `[ ]` Semantic Search Bar
 
-### Create Report - Reported 100%
+### Create Report - 100%
 
 - `[x]` Basic report details
 - `[x]` Location/geographic information
@@ -64,32 +61,32 @@ Still incomplete: map report pins, persistent ticket records/API, ticket-to-repo
 - `[x]` Persist report in the database
 - `[x]` New reports receive server-controlled `Pending` status
 
-### Map View
+### Map View - 100%
 
 - `[x]` Base map view
-- `[ ]` Report pins - Medium priority
-- `[ ]` Filter visible reports
-- `[ ]` Report blobs/clusters - Low priority
-
-### Ticketing System
-
-- `[~]` Restrict the mock ticket page to authority/admin; records and actions are still client-side only
-- `[ ]` Replace mock data with persisted ticket records and a secured Worker API
-- `[ ]` Define how tickets relate to reports, incidents, and authority users
-- `[ ]` Add persistent authorized ticket creation and status workflows
+- `[x]` Report Routes Display
+- `[x]` Proximity Tracking
+- `[x]` Filter visible reports
+- `[x]` Report Clusters/Hostpot
 
 ### Dashboard
 
-- `[ ]` Live numbers/metrics
-- `[ ]` Charts
-- `[ ]` Data tables
+- `[x]` Live numbers/metrics
+- `[x]` Charts
+- `[x]` Data tables
 - `[ ]` AI-generated summary
-- `[ ]` Export data
+- `[x]` Export CSV
+
+### AI Page
+- `[ ]` Gemini API Integration
+- `[x]` Function Calls
+- `[x]` 
+
 
 ### Cross-Cutting and AI
 
 - `[x]` Role-based route/navigation gating and Worker enforcement for Pending visibility and report resolution; role assignment remains Clerk Dashboard-only
-- `[ ]` AI-based report moderation
+- `[~]` AI-based report moderation — auto-approve/auto-reject with confidence scoring and manual review fallback implemented; admin override and appeal workflow pending
 
 ## Proposed Delivery Order
 
@@ -195,12 +192,22 @@ Acceptance criteria:
 
 Treat AI as an assistive capability, not the authorization or final enforcement authority.
 
-Scope:
+**Status: Auto-approve/auto-reject implemented.**
 
-- For report moderation, define acceptable use, data handling, confidence thresholds, human review, correction/appeal, and failure behavior before model integration.
-- Keep uncertain moderation outcomes in a review queue; do not silently discard valid public reports.
-- For dashboard summaries, ground output in authorized aggregate data, include the covered period, and handle unavailable or contradictory data without fabricating claims.
-- Record model/version and moderation decisions as appropriate for auditability and privacy policy.
+Implemented:
+- `[x]` Gemini multimodal moderation (`gemini-3.5-flash-lite`) runs fire-and-forget after report creation
+- `[x]` Confidence thresholds: ≥ 0.80 auto-approves or auto-rejects; below triggers manual review flag
+- `[x]` User-uploaded images analyzed; static maps excluded
+- `[x]` AI verdict, confidence, reason, and timestamp persisted on `reports` (migration `018`)
+- `[x]` Notifications sent for auto-approved, auto-rejected, and needs-review outcomes via NotificationHub DO
+- `[x]` System comments record AI decisions with confidence percentage
+- `[x]` Failures default to `Pending`; never block report creation or silently discard reports
+
+Remaining:
+- `[ ]` Admin dashboard view for reviewing AI-flagged reports and overriding decisions
+- `[ ]` User appeal/correction workflow for AI-rejected reports
+- `[ ]` Dashboard AI summaries grounded in authorized aggregate data
+- `[ ]` Privacy notice and data retention policy for AI-processed content
 
 Acceptance criteria:
 

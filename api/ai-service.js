@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { haversineDistanceMeters } from './clustering.js';
 
-const MODEL = 'gemini-3.5-flash-lite';
+const MODEL = 'gemini-3.1-flash-lite';
 const MAX_TURNS = 5;
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -320,6 +320,117 @@ export async function chatWithGemini(env, message, history = []) {
 			return { reply: 'The AI service is temporarily busy. Please try again in a moment.' };
 		}
 		return { reply: 'Sorry, the AI assistant encountered an error. Please try again.' };
+	}
+}
+
+/**
+ * AI moderation for new reports. Analyzes report text and optional user-uploaded
+ * image via Gemini multimodal. Returns { verdict, confidence, reason, needsManualReview }
+ * or null on failure.
+ *
+ * Thresholds (enforced by caller):
+ *   approve  + confidence >= 0.80 → auto-approve
+ *   reject   + confidence >= 0.80 → auto-reject
+ *   otherwise                     → manual review
+ */
+const MODERATION_PROMPT = `You are a road-incident report moderator for the RoadMap system in Bataan, Philippines.
+Evaluate whether this report is a legitimate road hazard, traffic violation, or infrastructure issue.
+
+Valid categories: Flooded Road, Road Construction, Road Closure, Damaged Road, Heavy Traffic, Fallen Debris, Road Accident (Self), Road Accident (Vehicular), Others.
+
+Rules:
+- APPROVE if the report describes a plausible road incident with sufficient detail.
+- REJECT if the report is spam, off-topic, contains inappropriate content, lacks meaningful description, or is clearly fraudulent.
+- If an image is provided, verify it shows a road-related scene consistent with the description. Reject if the image is unrelated, blank, or inappropriate.
+- Be lenient toward approval when uncertain; human reviewers can correct mistakes.
+
+Respond with ONLY valid JSON (no markdown fences):
+{
+  "verdict": "approve" | "reject",
+  "confidence": <number 0.0 to 1.0>,
+  "reason": "<brief explanation, max 300 chars>",
+  "needsManualReview": <boolean — true if you are unsure or confidence is below 0.80>
+}`;
+
+export async function moderateReport(env, { title, description, category, imageR2Key }) {
+	console.log('[ai-moderation] Starting moderation for report:', { title, category, hasImage: !!imageR2Key });
+	if (!env.GEMINI_API_KEY) {
+		console.warn('[ai-moderation] GEMINI_API_KEY not set in environment');
+		return null;
+	}
+
+	let ai;
+	try {
+		ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+	} catch (err) {
+		console.error('[ai-moderation] failed to initialize Gemini:', String(err));
+		return null;
+	}
+
+	const parts = [{ text: MODERATION_PROMPT }];
+	parts.push({ text: `Title: ${title}\nCategory: ${category}\nDescription: ${description}` });
+
+	// Attach user-uploaded image if present (not the static map).
+	if (imageR2Key) {
+		console.log('[ai-moderation] Attempting to read image from R2 key:', imageR2Key);
+		try {
+			const object = await env.ROAD_MAP_MEDIA.get(imageR2Key);
+			if (object) {
+				console.log('[ai-moderation] Successfully read image from R2, size:', object.size, 'bytes');
+				const buffer = await object.arrayBuffer();
+				const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+				const contentType = object.httpMetadata?.contentType || 'image/jpeg';
+				console.log('[ai-moderation] Image metadata:', { contentType, size: buffer.byteLength });
+				parts.push({ inlineData: { mimeType: contentType, data: base64 } });
+			} else {
+				console.warn('[ai-moderation] R2 object is null for key:', imageR2Key);
+			}
+		} catch (err) {
+			console.error('[ai-moderation] failed to read image from R2:', String(err));
+			// Continue without image rather than failing entirely.
+		}
+	}
+
+	try {
+		console.log('[ai-moderation] Sending request to Gemini with', parts.length, 'parts');
+		const response = await ai.models.generateContent({
+			model: MODEL,
+			contents: [{ role: 'user', parts }],
+		});
+
+		console.log('[ai-moderation] Gemini response received:', JSON.stringify(response, null, 2));
+
+		const text = response.candidates?.[0]?.content?.parts
+			?.map((p) => p.text)
+			.filter((t) => typeof t === 'string')
+			.join('')
+			.trim();
+
+		if (!text) {
+			console.error('[ai-moderation] empty response from Gemini');
+			return null;
+		}
+
+		console.log('[ai-moderation] Raw response text:', text);
+
+		// Strip markdown fences if present.
+		const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+		console.log('[ai-moderation] Cleaned response:', cleaned);
+
+		const parsed = JSON.parse(cleaned);
+		console.log('[ai-moderation] Parsed JSON:', parsed);
+
+		const verdict = parsed.verdict === 'reject' ? 'reject' : 'approve';
+		const confidence = Math.min(1, Math.max(0, Number(parsed.confidence) || 0));
+		const reason = typeof parsed.reason === 'string' ? parsed.reason.slice(0, 300) : 'No reason provided.';
+		const needsManualReview = parsed.needsManualReview === true || confidence < 0.80;
+
+		const result = { verdict, confidence, reason, needsManualReview };
+		console.log('[ai-moderation] Final moderation result:', result);
+		return result;
+	} catch (err) {
+		console.error('[ai-moderation] error:', err?.message || String(err), 'Stack:', err?.stack);
+		return null;
 	}
 }
 

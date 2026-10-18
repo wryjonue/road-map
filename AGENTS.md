@@ -145,3 +145,18 @@ This matches the precedent established by `report_votes.user_id`, `notifications
 ### Denormalized Author Columns — Removed
 
 The `author_name` and `author_image_url` columns on `reports` and `comments` have been physically removed (migration `017_drop_denormalized_author_columns.sql`). All author display data is now resolved exclusively via `LEFT JOIN users u ON u.id = r.author_id AND u.deleted_at IS NULL`. Do not reference these columns in any query, INSERT, or UPDATE statement.
+
+### AI Report Moderation
+
+New reports are automatically evaluated by Gemini (`gemini-3.5-flash-lite`) after creation via `moderateReport` in `api/ai-service.js`. The AI analyzes the report title, description, category, and user-uploaded image (static maps are excluded).
+
+**Confidence thresholds:**
+- **Auto-approve** (confidence ≥ 0.80, verdict = approve): status set to `Open`, author notified via `report_auto_approved`, system comment added.
+- **Auto-reject** (confidence ≥ 0.80, verdict = reject): status set to `Rejected`, author notified via `report_auto_rejected` with reason, system comment added.
+- **Manual review** (confidence < 0.80 or `needsManualReview = true`): stays `Pending`, author notified via `report_needs_review`. Admins should review these in the dashboard.
+
+**Failure behavior:** AI errors (timeout, API failure, parse error) leave the report as `Pending` for manual review. Moderation never blocks the create-report response; it runs fire-and-forget after the 201 response.
+
+**Audit columns on `reports`:** `ai_verdict`, `ai_confidence`, `ai_reason`, `ai_reviewed_at` (added in migration `018_ai_moderation.sql`).
+
+AI moderation is assistive, not authoritative. Authority/admin users can always override AI decisions through the existing approve/reject endpoints.
