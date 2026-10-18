@@ -182,7 +182,7 @@ export default function FeedPage() {
 					<input
 						type="search"
 						className={styles.searchInput}
-						placeholder="Search reports, routes, or locations"
+						placeholder="Search reports..."
 						aria-label="Search reports"
 						value={pendingFilters.q}
 						onChange={(e) => updateFilter('q', e.target.value)}
