@@ -90,7 +90,6 @@ export default function MapView() {
 
 	const { nearbyReports, referenceLabel } = useMemo(() => {
 		const refCoords = userLocation || [120.5394262, 14.6779294];
-		const label = userLocation ? 'Distance from your current location' : 'Distance from map center (location unavailable)';
 		const nearby = reports
 			.filter((report) => report.status === 'Open')
 			.map((report) => ({
@@ -99,7 +98,7 @@ export default function MapView() {
 			}))
 			.filter((report) => report.distanceMeters <= proximityThreshold)
 			.sort((a, b) => a.distanceMeters - b.distanceMeters);
-		return { nearbyReports: nearby, referenceLabel: label };
+		return { nearbyReports: nearby};
 	}, [reports, userLocation, proximityThreshold]);
 
 	useEffect(() => {
@@ -451,10 +450,7 @@ export default function MapView() {
 
 	return (
 		<div className={styles.mapPage}>
-			<div className={styles.heading}>
-				<div><h1>Road network map</h1></div>
-				<span className={styles.resultCount}>{reports.length} reports</span>
-			</div>
+		
 
 			<div className={styles.filterBar}>
 				<select
