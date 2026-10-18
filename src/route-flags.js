@@ -1,5 +1,5 @@
 export const ROUTE_ENABLED = Object.freeze({
 	home: false,
-	about: false,
+	about: true,
 	tickets: false,
 });

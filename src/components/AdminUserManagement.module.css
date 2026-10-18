@@ -1,5 +1,13 @@
 .container {
-  margin-top: 24px;
+  background: var(--surface);
+	border: 1px solid var(--border-light);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	min-width: 0;
 }
 
 .header {
@@ -43,25 +51,37 @@
 
 .userList {
   overflow-x: auto;
+  min-width: 0;
 }
 
 .table {
   width: 100%;
-  border-collapse: collapse;
-  min-width: 600px;
+	border-collapse: collapse;
+	text-align: left;
 }
 
 .table th {
-  text-align: left;
-  padding: 12px 16px;
-  background: var(--surface);
-  font-weight: 600;
-  color: var(--text);
-  border-bottom: 1px solid var(--border-light);
+  padding: 12px 14px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	border-bottom: 1px solid var(--border-light);
+	background: var(--bg-app);
+	white-space: nowrap;
 }
 
 .table td {
-  padding: 12px 16px;
+  padding: 14px;
+	font-size: 0.875rem;
+	color: var(--text);
+	border-bottom: 1px solid var(--border-light);
+	vertical-align: middle;
+}
+
+/* Ensure the last row matches the border styling of regular rows */
+.table tr:last-child td {
   border-bottom: 1px solid var(--border-light);
 }
 
@@ -73,7 +93,8 @@
   transition: background-color 0.2s;
 }
 
-.userCell {
+.userCellData {
+  height: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -133,6 +154,7 @@
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
+  display: inline-block;
 }
 
 .roleBadge[data-role='user'] {
@@ -160,6 +182,7 @@
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
+  display: inline-block;
 }
 
 .statusBadge.active {
@@ -176,6 +199,7 @@
   width: 200px;
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
 .actionButton {

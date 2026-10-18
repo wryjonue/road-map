@@ -14,6 +14,7 @@ export function buildDisplayName(firstName, lastName) {
  * first_name/last_name fields. This helper splits `name` as a fallback.
  */
 function extractNames(source) {
+	console.log("Source Extraction\n\n\n" + JSON.stringify(source));
 	let firstName = (typeof source.first_name === 'string' ? source.first_name : source.firstName)?.trim() || null;
 	let lastName = (typeof source.last_name === 'string' ? source.last_name : source.lastName)?.trim() || null;
 

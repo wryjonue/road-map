@@ -1,4 +1,4 @@
- import { useEffect, useRef, useState } from 'react';
+﻿ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Filler, Legend, LineController, LineElement, LinearScale, PointElement, Tooltip } from 'chart.js';
 import PendingReportsTable from '../components/PendingReportsTable';
@@ -468,17 +468,19 @@ export default function Dashboard() {
 				</div>
 			)}
 
-			{/* Admin User Management (admin only) */}
-			{canAdmin && (
-				<div className={`${styles.reportSection} ${styles.noPrint}`}>
-					<AdminUserManagement />
-				</div>
-			)}
-
 			{/* Recently archived (managers only) */}
 			{canManage && (
 				<div className={`${styles.reportSection} ${styles.noPrint}`}>
 					<ArchivedReportsTable />
+				</div>
+			)}
+
+			
+
+			{/* Admin User Management (admin only) */}
+			{canAdmin && (
+				<div className={`${styles.reportSection} ${styles.noPrint}`}>
+					<AdminUserManagement />
 				</div>
 			)}
 		</div>

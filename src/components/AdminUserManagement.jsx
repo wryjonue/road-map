@@ -7,7 +7,7 @@ export default function AdminUserManagement({ onActionComplete }) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { isLoaded: roleLoaded, role } = useAppRole();
   const canAdmin = roleLoaded && role === 'admin';
-  
+
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -15,11 +15,11 @@ export default function AdminUserManagement({ onActionComplete }) {
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [newRole, setNewRole] = useState('user');
-  
+
   // Fetch users (only for admins)
   useEffect(() => {
     if (!canAdmin || !isLoaded) return;
-    
+
     const fetchUsers = async () => {
       setIsLoading(true);
       setError('');
@@ -28,7 +28,7 @@ export default function AdminUserManagement({ onActionComplete }) {
         const response = await fetch('/api/users', {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
-        
+
         if (!response.ok) throw new Error('Failed to fetch users');
         const data = await response.json();
         setUsers(Array.isArray(data) ? data : data.users || []);
@@ -38,10 +38,10 @@ export default function AdminUserManagement({ onActionComplete }) {
         setIsLoading(false);
       }
     };
-    
+
     void fetchUsers();
   }, [canAdmin, isLoaded, isSignedIn, getToken]);
-  
+
   const handleRoleChange = async (userId, role) => {
     try {
       const token = isSignedIn ? await getToken() : null;
@@ -53,9 +53,9 @@ export default function AdminUserManagement({ onActionComplete }) {
         },
         body: JSON.stringify({ role }),
       });
-      
+
       if (!response.ok) throw new Error('Failed to update role');
-      
+
       // Update local state
       setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
       setShowRoleModal(false);
@@ -64,7 +64,7 @@ export default function AdminUserManagement({ onActionComplete }) {
       setError(err.message || 'Failed to change role');
     }
   };
-  
+
   const handleBlockUser = async (userId) => {
     try {
       const token = isSignedIn ? await getToken() : null;
@@ -72,9 +72,9 @@ export default function AdminUserManagement({ onActionComplete }) {
         method: 'PATCH',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      
+
       if (!response.ok) throw new Error('Failed to block user');
-      
+
       // Update local state
       setUsers(users.map(u => u.id === userId ? { ...u, deleted_at: new Date().toISOString() } : u));
       setShowBlockModal(false);
@@ -83,7 +83,7 @@ export default function AdminUserManagement({ onActionComplete }) {
       setError(err.message || 'Failed to block user');
     }
   };
-  
+
   const handleUnblockUser = async (userId) => {
     try {
       const token = isSignedIn ? await getToken() : null;
@@ -91,9 +91,9 @@ export default function AdminUserManagement({ onActionComplete }) {
         method: 'PATCH',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      
+
       if (!response.ok) throw new Error('Failed to unblock user');
-      
+
       // Update local state
       setUsers(users.map(u => u.id === userId ? { ...u, deleted_at: null } : u));
       if (onActionComplete) onActionComplete();
@@ -101,7 +101,7 @@ export default function AdminUserManagement({ onActionComplete }) {
       setError(err.message || 'Failed to unblock user');
     }
   };
-  
+
   const getRoleDisplay = (role) => {
     switch (role) {
       case 'user': return 'Member';
@@ -110,25 +110,25 @@ export default function AdminUserManagement({ onActionComplete }) {
       default: return role;
     }
   };
-  
+
   const getStatusBadge = (user) => {
     if (user.deleted_at) {
       return <span className={styles.statusBadge + ' ' + styles.blocked}>Blocked</span>;
     }
     return <span className={styles.statusBadge + ' ' + styles.active}>Active</span>;
   };
-  
+
   if (!canAdmin) return null;
-  
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <h2 className={styles.title}>User Management</h2>
         <p className={styles.subtitle}>Manage user roles and account status</p>
       </div>
-      
+
       {error && <p className={styles.error}>{error}</p>}
-      
+
       {isLoading ? (
         <div className={styles.loading}>Loading users...</div>
       ) : (
@@ -149,20 +149,24 @@ export default function AdminUserManagement({ onActionComplete }) {
                 {users.map((user) => (
                   <tr key={user.id} className={styles.tableRow}>
                     <td className={styles.userCell}>
-                      <div className={styles.userAvatar}>
-                        {user.image_url ? (
-                          <img src={user.image_url} alt="User avatar" />
-                        ) : (
-                          <div className={styles.avatarPlaceholder}>
-                            {user.first_name?.[0] || 'U'}
-                          </div>
-                        )}
-                      </div>
-                      <div className={styles.userInfo}>
-                        <div className={styles.userName}>
-                          {user.first_name} {user.last_name}
+                      <div className={styles.userCellData}>
+
+
+                        <div className={styles.userAvatar}>
+                          {user.image_url ? (
+                            <img src={user.image_url} alt="User avatar" />
+                          ) : (
+                            <div className={styles.avatarPlaceholder}>
+                              {user.first_name?.[0] || 'U'}
+                            </div>
+                          )}
                         </div>
-                        <div className={styles.userEmail}>{user.id}</div>
+                        <div className={styles.userInfo}>
+                          <div className={styles.userName}>
+                            {user.first_name} {user.last_name}
+                          </div>
+                          <div className={styles.userEmail}>{user.id}</div>
+                        </div>
                       </div>
                     </td>
                     <td className={styles.roleCell}>
@@ -174,7 +178,7 @@ export default function AdminUserManagement({ onActionComplete }) {
                       {getStatusBadge(user)}
                     </td>
                     <td className={styles.actionsCell}>
-                      <button 
+                      <button
                         className={styles.actionButton}
                         onClick={() => {
                           setSelectedUser(user);
@@ -186,7 +190,7 @@ export default function AdminUserManagement({ onActionComplete }) {
                         Change Role
                       </button>
                       {user.deleted_at ? (
-                        <button 
+                        <button
                           className={`${styles.actionButton} ${styles.unblockButton}`}
                           onClick={() => handleUnblockUser(user.id)}
                           aria-label="Unblock user"
@@ -194,7 +198,7 @@ export default function AdminUserManagement({ onActionComplete }) {
                           Unblock
                         </button>
                       ) : (
-                        <button 
+                        <button
                           className={`${styles.actionButton} ${styles.blockButton}`}
                           onClick={() => {
                             setSelectedUser(user);
@@ -213,14 +217,14 @@ export default function AdminUserManagement({ onActionComplete }) {
           )}
         </div>
       )}
-      
+
       {/* Role Change Modal */}
       {showRoleModal && selectedUser && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
               <h3>Change Role for {selectedUser.first_name} {selectedUser.last_name}</h3>
-              <button 
+              <button
                 className={styles.closeButton}
                 onClick={() => setShowRoleModal(false)}
                 aria-label="Close modal"
@@ -230,7 +234,7 @@ export default function AdminUserManagement({ onActionComplete }) {
             </div>
             <div className={styles.modalBody}>
               <label className={styles.label}>New Role:</label>
-              <select 
+              <select
                 className={styles.select}
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
@@ -244,13 +248,13 @@ export default function AdminUserManagement({ onActionComplete }) {
               </p>
             </div>
             <div className={styles.modalFooter}>
-              <button 
+              <button
                 className={styles.cancelButton}
                 onClick={() => setShowRoleModal(false)}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 className={styles.confirmButton}
                 onClick={() => handleRoleChange(selectedUser.id, newRole)}
               >
@@ -260,14 +264,14 @@ export default function AdminUserManagement({ onActionComplete }) {
           </div>
         </div>
       )}
-      
+
       {/* Block User Modal */}
       {showBlockModal && selectedUser && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
               <h3>Block User</h3>
-              <button 
+              <button
                 className={styles.closeButton}
                 onClick={() => setShowBlockModal(false)}
                 aria-label="Close modal"
@@ -277,7 +281,7 @@ export default function AdminUserManagement({ onActionComplete }) {
             </div>
             <div className={styles.modalBody}>
               <p>
-                Are you sure you want to block <strong>{selectedUser.first_name} {selectedUser.last_name}</strong>? 
+                Are you sure you want to block <strong>{selectedUser.first_name} {selectedUser.last_name}</strong>?
                 This will prevent them from creating reports and accessing the system.
               </p>
               <p className={styles.warning}>
@@ -285,13 +289,13 @@ export default function AdminUserManagement({ onActionComplete }) {
               </p>
             </div>
             <div className={styles.modalFooter}>
-              <button 
+              <button
                 className={styles.cancelButton}
                 onClick={() => setShowBlockModal(false)}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 className={`${styles.confirmButton} ${styles.dangerButton}`}
                 onClick={() => handleBlockUser(selectedUser.id)}
               >
