@@ -2,11 +2,12 @@ import { NavLink, Link } from 'react-router';
 import { Show, useAuth, useUser, UserButton } from '@clerk/react';
 import { useAppRole, canManageReports } from '../auth/roles';
 import { ROUTE_ENABLED } from '../route-flags';
+import roadmapIconSmall from '../assets/roadmap-icon-small.png';
 import styles from './Sidebar.module.css';
 
 const ROLE_LABELS = { user: 'Community member', authority: 'Road Enforcer', admin: 'Admin' };
 
-// Simple SVG icons for navigation
+
 const Icons = {
   Dashboard: () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -71,10 +72,7 @@ export default function Sidebar({ isOpen, onClose }) {
         <div className={styles.header}>
           <div className={styles.logo}>
             <div className={styles.logoIcon}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
+              <img src={roadmapIconSmall} alt="RoadMap" />
             </div>
             <span className={styles.logoText}>RoadMap</span>
           </div>
@@ -97,7 +95,7 @@ export default function Sidebar({ isOpen, onClose }) {
               onClick={onClose}
             >
               <Icons.Feed />
-              <span>Community reports</span>
+              <span>Report Feed</span>
             </NavLink>
             
             <NavLink 
@@ -106,7 +104,7 @@ export default function Sidebar({ isOpen, onClose }) {
               onClick={onClose}
             >
               <Icons.Map />
-              <span>2D incident map</span>
+              <span>2D Map View</span>
             </NavLink>
 
             {ROUTE_ENABLED.tickets && canViewTickets && (
@@ -126,7 +124,7 @@ export default function Sidebar({ isOpen, onClose }) {
               onClick={onClose}
             >
               <Icons.AI />
-              <span>AI road assistant</span>
+              <span>AI Assistant</span>
             </NavLink>
 
             <NavLink 

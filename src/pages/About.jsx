@@ -2,13 +2,15 @@ import liminAvatar from '../assets/avatars/limin-avatar.jpg';
 import manuelAvatar from '../assets/avatars/manuel-avatar.jpg';
 import mallariAvatar from '../assets/avatars/mallari-avatar.png';
 import bagtasAvatar from '../assets/avatars/bagtas-avatar.jpg';
+import logoImg from '../assets/logo.png';
+import roadmapIcon from '../assets/roadmap-icon.png';
 import styles from './About.module.css';
 
 const TEAM = [
 	{ name: 'Angelo Glenn C. Limin', role: 'Project Leader', avatar: liminAvatar },
 	{ name: 'James Timothy A. Manuel', role: 'Document Controller', avatar: manuelAvatar },
-	{ name: 'Nella Gabriel B. Mallari', role: 'Graphic Designer', avatar: mallariAvatar },
-	{ name: 'Harley Jet P. Bagtas', role: 'Technical Staff', avatar: bagtasAvatar },
+	{ name: 'Nella Gabriel B. Mallari', role: 'UI/UX Designer', avatar: mallariAvatar },
+	{ name: 'Harley Jet P. Bagtas', role: 'Technical Assistant', avatar: bagtasAvatar },
 ];
 
 const FEATURES = [
@@ -64,13 +66,15 @@ export default function About() {
 		<div className={`${styles.aboutPage}`}>
 			{/* Hero */}
 			<section className={styles.hero}>
-				<h1 className={styles.title}>RoadMap</h1>
-				<p className={styles.description}>
-					RoadMap empowers Bataan and Bataeños to build safer roads through community-driven incident reporting,
-						AI-powered moderation, and interactive map visualization. The platform connects citizens with local
-						authorities to identify, report, and resolve road hazards efficiently using intelligent automation
-						and real-time geospatial data.
-				</p>
+				<div className={styles.heroBranding}>
+					<img className={styles.heroLogo} src={logoImg} alt="RoadMap" />
+					<p className={styles.description}>
+						RoadMap empowers Bataeños to build safer roads via community-driven incident reporting,
+						AI-powered moderation and assistant, and interactive map visualization. The platform connects citizens with local
+						their community members to identify, report, and resolve road hazards efficiently.
+					</p>
+				</div>
+				<img className={styles.heroIcon} src={roadmapIcon} alt="RoadMap icon" />
 			</section>
 
 			{/* Features */}

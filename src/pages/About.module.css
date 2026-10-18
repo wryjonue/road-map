@@ -1,7 +1,6 @@
 .aboutPage {
 	display: grid;
 	gap: 32px;
-	max-width: 960px;
 	margin: 0 auto;
 }
 
@@ -9,22 +8,41 @@
 .hero {
 	text-align: center;
 	padding: 16px 0 8px;
+	display:flex;
+	width: 100%;
 }
 
-.title {
-	margin: 0 0 16px;
-	font-size: 2.75rem;
-	font-weight: 800;
-	color: var(--text);
-	letter-spacing: -0.02em;
+.heroBranding {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 16px;
+	padding-top: 50px;
+}
+
+.heroIcon {
+	margin-left:auto;
+	margin-right: auto;
+	width: 300px;
+	height: 300px;
+	min-width: 50px;
+	min-height: 50px;
+	object-fit: contain;
+}
+
+.heroLogo {
+	min-height: 50px;
+	width: auto;
+	object-fit: contain;
 }
 
 .description {
-	margin: 0 auto;
 	max-width: 640px;
 	color: var(--text-muted);
 	font-size: 1rem;
 	line-height: 1.7;
+	text-align: left;;
 }
 
 /* Section headings */
@@ -251,7 +269,9 @@
 	.aboutPage {
 		gap: 24px;
 	}
-
+	.hero {
+		flex-direction: column-reverse;
+	}
 	.title {
 		font-size: 2rem;
 	}

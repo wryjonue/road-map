@@ -16,9 +16,9 @@ export default function ProximityAlerts({ nearbyReports, threshold, onThresholdC
 	return (
 		<section className={styles.panel} aria-label="Proximity alerts">
 			<div className={styles.panelHeader}>
-				<h2>Nearby incidents</h2>
+				<h2>Proximity Alerts</h2>
 				<label className={styles.thresholdControl}>
-					<span>Within</span>
+					<span>Max distance</span>
 					<select value={threshold} onChange={(event) => onThresholdChange(Number(event.target.value))}>
 						{THRESHOLD_OPTIONS.map((option) => (
 							<option key={option.value} value={option.value}>{option.label}</option>

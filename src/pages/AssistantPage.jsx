@@ -269,8 +269,8 @@ export default function AssistantPage() {
 			<div className={styles.card}>
 				<header className={styles.chatHeader}>
 					<div>
-						<h2 className={styles.chatTitle}>AI Assistant Chat</h2>
-						<p className={styles.chatSubtitle}>Interactive chatbot to help you with our app-related incidents.</p>
+						<h2 className={styles.chatTitle}>Chat</h2>
+						
 					</div>
 					<button type="button" className={styles.clearBtn} onClick={clearChat} disabled={isSending || messages.length === 0}>
 						Clear Chat
@@ -283,7 +283,7 @@ export default function AssistantPage() {
 					{!historyLoaded && <p className={styles.state}>Loading conversation…</p>}
 					{historyLoaded && messages.length === 0 && !isSending && (
 						<div className={styles.empty}>
-							<p className={styles.emptyText}>Hi! I can help you explore road incident reports. Try one of these:</p>
+							<p className={styles.emptyText}>Example prompts:</p>
 							<div className={styles.chips}>
 								{EXAMPLE_PROMPTS.map((prompt) => (
 									<button key={prompt} type="button" className={styles.chip} onClick={() => void sendMessage(prompt)} disabled={isSending}>
