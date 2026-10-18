@@ -61,7 +61,7 @@ const FEATURES = [
 
 export default function About() {
 	return (
-		<div className={`page-card ${styles.aboutPage}`}>
+		<div className={`${styles.aboutPage}`}>
 			{/* Hero */}
 			<section className={styles.hero}>
 				<h1 className={styles.title}>RoadMap</h1>
@@ -79,8 +79,10 @@ export default function About() {
 				<div className={styles.featuresGrid}>
 					{FEATURES.map((feature) => (
 						<div key={feature.title} className={styles.featureCard}>
-							<div className={styles.featureIcon}>{feature.icon}</div>
-							<h3 className={styles.featureTitle}>{feature.title}</h3>
+							<div class={styles.featureWrapper}>
+								<div className={styles.featureIcon}>{feature.icon}</div>
+								<h3 className={styles.featureTitle}>{feature.title}</h3>
+							</div>
 							<p className={styles.featureDescription}>{feature.description}</p>
 						</div>
 					))}
