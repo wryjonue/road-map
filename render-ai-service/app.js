@@ -40,10 +40,27 @@ function getR2Client() {
 
 // Middleware: capture raw body for HMAC verification
 app.use(cors());
+
+// Debug middleware: log ALL incoming requests before any processing
+app.use((req, res, next) => {
+  logger.info({
+    method: req.method,
+    path: req.path,
+    headers: {
+      'content-type': req.headers['content-type'],
+      'x-webhook-signature': req.headers['x-webhook-signature'] ? '[PRESENT]' : '[MISSING]',
+      'user-agent': req.headers['user-agent'],
+    },
+    query: req.query,
+  }, 'Incoming request received');
+  next();
+});
+
 app.use(bodyParser.json({
   limit: '10mb',
   verify: (req, _res, buf) => {
     req.rawBody = buf.toString('utf8');
+    logger.debug({ bodyLength: buf.length, bodyPreview: buf.toString('utf8').slice(0, 200) }, 'Raw body captured for HMAC');
   },
 }));
 
@@ -56,9 +73,13 @@ app.get('/health', (_req, res) => {
 /** Maximum allowed age of incoming webhook timestamp in milliseconds (5 minutes). */
 const REPLAY_WINDOW_MS = 5 * 60 * 1000;
 
-app.post('/moderate', verifyHmac, async (req, res) => {
+app.post('/moderate', (req, res, next) => {
+  logger.info({ bodyKeys: Object.keys(req.body || {}), hasRawBody: !!req.rawBody }, '/moderate handler entered (pre-HMAC)');
+  next();
+}, verifyHmac, async (req, res) => {
   const { reportId, title, description, category, imageKey, authorId, timestamp } = req.body;
   const log = logger.child({ reportId });
+  log.info({ reportId, title, category, hasImage: !!imageKey, timestamp }, '/moderate post-HMAC: payload validated');
 
   // Validate required fields
   if (!reportId || !title || !description || !category) {

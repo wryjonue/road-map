@@ -15,7 +15,7 @@ export { NotificationHub } from './durable-objects/notification-hub.js';
 export { ChatRoom } from './durable-objects/chat-room.js';
 
 export default {
-	async fetch(request, env) {
+	async fetch(request, env, ctx) {
 		const url = new URL(request.url);
 		try {
 			// Clerk webhook endpoint — no auth required, signature verified internally.
@@ -249,7 +249,7 @@ const voteMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
 			if (request.method === 'POST') {
 				const auth = await requireUser(request, env);
 				if (auth instanceof Response) return auth;
-				return createReport(request, env, auth);
+				return createReport(request, env, auth, ctx);
 			}
 			return Response.json({ error: 'Method not allowed' }, { status: 405 });
 		} catch (error) {

@@ -96,11 +96,21 @@ export async function getMonthlyReport(env, month, municipality) {
 	const start = `${month}-01`;
 	const end = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
 
+	// Previous month for trend comparison
+	const prevMon = mon === 1 ? 12 : mon - 1;
+	const prevYear = mon === 1 ? year - 1 : year;
+	const prevStart = `${prevYear}-${String(prevMon).padStart(2, '0')}-01`;
+	const prevEnd = start;
+
 	let muniFilter = '';
 	const params = [start, end];
+	let prevMuniFilter = '';
+	const prevParams = [prevStart, prevEnd];
 	if (municipality && municipality !== 'all') {
 		muniFilter = 'AND city = ?';
 		params.push(municipality);
+		prevMuniFilter = 'AND city = ?';
+		prevParams.push(municipality);
 	}
 
 	const { results: summaryRows } = await env.road_map_db.prepare(`
@@ -111,6 +121,32 @@ export async function getMonthlyReport(env, month, municipality) {
 		WHERE deleted_at IS NULL AND status <> 'Rejected' AND created_at >= ? AND created_at < ? ${muniFilter}
 	`).bind(...params).all();
 	const summary = summaryRows[0] || { total: 0, resolved: 0, unresolved: 0 };
+
+	// Status breakdown for doughnut chart
+	const { results: statusRows } = await env.road_map_db.prepare(`
+		SELECT status, COUNT(*) AS count
+		FROM reports
+		WHERE deleted_at IS NULL AND status <> 'Rejected' AND created_at >= ? AND created_at < ? ${muniFilter}
+		GROUP BY status
+	`).bind(...params).all();
+
+	// Daily trend for selected month
+	const { results: dailyRows } = await env.road_map_db.prepare(`
+		SELECT strftime('%Y-%m-%d', created_at) AS day, COUNT(*) AS count
+		FROM reports
+		WHERE deleted_at IS NULL AND status <> 'Rejected' AND created_at >= ? AND created_at < ? ${muniFilter}
+		GROUP BY day
+		ORDER BY day
+	`).bind(...params).all();
+
+	// Previous month summary for trends
+	const { results: prevSummaryRows } = await env.road_map_db.prepare(`
+		SELECT COUNT(*) AS total,
+			COALESCE(SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END), 0) AS resolved
+		FROM reports
+		WHERE deleted_at IS NULL AND status <> 'Rejected' AND created_at >= ? AND created_at < ? ${prevMuniFilter}
+	`).bind(...prevParams).all();
+	const prevSummary = prevSummaryRows[0] || { total: 0, resolved: 0 };
 
 	const muniFilterR = muniFilter.replace('AND city', 'AND r.city');
 	const { results: categoryRows } = await env.road_map_db.prepare(`
@@ -125,21 +161,46 @@ export async function getMonthlyReport(env, month, municipality) {
 		ORDER BY total DESC
 	`).bind(...params).all();
 
+	// Municipality chart respects the active filter.
 	const { results: locationRows } = await env.road_map_db.prepare(`
 		SELECT COALESCE(NULLIF(city, ''), 'Unknown municipality') AS municipality,
 			COUNT(*) AS count
 		FROM reports
-		WHERE deleted_at IS NULL AND status <> 'Rejected' AND created_at >= ? AND created_at < ?
+		WHERE deleted_at IS NULL AND status <> 'Rejected' AND created_at >= ? AND created_at < ? ${muniFilter}
 		GROUP BY municipality
 		ORDER BY count DESC
-	`).bind(start, end).all();
+	`).bind(...params).all();
+
+	// Unfiltered facet so the municipality dropdown always lists every option.
+	const { results: municipalityFacetRows } = await env.road_map_db.prepare(`
+		SELECT DISTINCT COALESCE(NULLIF(city, ''), 'Unknown municipality') AS municipality
+		FROM reports
+		WHERE deleted_at IS NULL AND status <> 'Rejected'
+		ORDER BY municipality
+	`).all();
+
+	const currentTotal = Number(summary.total) || 0;
+	const prevTotal = Number(prevSummary.total) || 0;
+	const currentResolved = Number(summary.resolved) || 0;
+	const prevResolved = Number(prevSummary.resolved) || 0;
+	const currentRate = currentTotal ? Math.round((currentResolved / currentTotal) * 1000) / 10 : 0;
+	const prevRate = prevTotal ? Math.round((prevResolved / prevTotal) * 1000) / 10 : 0;
 
 	return Response.json({
 		month,
-		total: Number(summary.total) || 0,
-		resolved: Number(summary.resolved) || 0,
+		total: currentTotal,
+		resolved: currentResolved,
 		unresolved: Number(summary.unresolved) || 0,
+		previous: { total: prevTotal, resolved: prevResolved },
+		trends: {
+			totalChange: prevTotal ? Math.round(((currentTotal - prevTotal) / prevTotal) * 1000) / 10 : null,
+			resolvedChange: prevResolved ? Math.round(((currentResolved - prevResolved) / prevResolved) * 1000) / 10 : null,
+			rateChange: Math.round((currentRate - prevRate) * 10) / 10,
+		},
+		byStatus: statusRows.map((row) => ({ status: row.status, count: Number(row.count) || 0 })),
+		dailyReports: dailyRows.map((row) => ({ day: row.day, count: Number(row.count) || 0 })),
 		byCategory: categoryRows.map((row) => ({ name: row.category_name, total: Number(row.total) || 0, resolved: Number(row.resolved) || 0, active: Number(row.active) || 0 })),
 		byMunicipality: locationRows.map((row) => ({ municipality: row.municipality, count: Number(row.count) || 0 })),
+		municipalities: municipalityFacetRows.map((row) => row.municipality),
 	}, { headers: { 'Cache-Control': 'no-store' } });
 }

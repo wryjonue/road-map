@@ -31,4 +31,5 @@ dist-ssr
 !.env.example
 
 # For Agent's Eyes
-render-ai-service/
+render-ai-service/*
+plans/*

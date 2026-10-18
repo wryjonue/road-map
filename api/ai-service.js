@@ -18,17 +18,16 @@ Rules:
   - Municipality: MUNICIPALITY
   - Date: DATE
 - When summarizing stats or categories, use this exact plain-text format:
-  - Kabuuang Bilang ng Reports: COUNT
-  - Resolved (Nalutas na): COUNT
-  - Unresolved (Hindi pa nalulutas): COUNT
-  - Mga Pangunahing Kategorya:
+  - Total Number of Reports: COUNT
+  - Resolved: COUNT
+  - Unresolved: COUNT
+  - Main Categories:
     - CATEGORY_NAME: COUNT
     - CATEGORY_NAME: COUNT
 - Never wrap category names, counts, or stats in markdown links. Never use [text](url) format for stats or categories.
 - Be concise. Include only the ID, title, municipality, status, and date for each report.
 - Distances are in kilometers; coordinates are longitude/latitude (WGS84). Bataan is around latitude 14.68, longitude 120.54.
 - If a tool returns no results, say so plainly and suggest broadening the search.`;
-
 // --- Tool definitions (Gemini function declarations) ---
 const TOOLS = [
 	{

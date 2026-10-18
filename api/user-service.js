@@ -41,7 +41,7 @@ function extractNames(source) {
 export async function getUserById(env, userId) {
 	if (!userId) return null;
 	return env.road_map_db.prepare(
-		'SELECT id, first_name, last_name, image_url, created_at, updated_at, deleted_at FROM users WHERE id = ? LIMIT 1'
+		'SELECT id, first_name, last_name, image_url, role, created_at, updated_at, deleted_at FROM users WHERE id = ? LIMIT 1'
 	).bind(userId).first();
 }
 
@@ -64,8 +64,8 @@ export async function upsertUserFromClaims(env, claims) {
 		const existing = await getUserById(env, id);
 		if (existing) return;
 		await env.road_map_db.prepare(
-			'INSERT INTO users (id) VALUES (?)'
-		).bind(id).run();
+			'INSERT INTO users (id, role) VALUES (?, ?)'
+		).bind(id, 'user').run();
 		return;
 	}
 
@@ -82,8 +82,8 @@ export async function upsertUserFromClaims(env, claims) {
 		).bind(fn, ln, img, id).run();
 	} else {
 		await env.road_map_db.prepare(
-			'INSERT INTO users (id, first_name, last_name, image_url) VALUES (?, ?, ?, ?)'
-		).bind(id, firstName, lastName, imageUrl).run();
+			'INSERT INTO users (id, first_name, last_name, image_url, role) VALUES (?, ?, ?, ?, ?)'
+		).bind(id, firstName, lastName, imageUrl, 'user').run();
 	}
 }
 
@@ -106,8 +106,8 @@ export async function upsertUserFromPayload(env, userData) {
 		).bind(firstName, lastName, imageUrl, id).run();
 	} else {
 		await env.road_map_db.prepare(
-			'INSERT INTO users (id, first_name, last_name, image_url) VALUES (?, ?, ?, ?)'
-		).bind(id, firstName, lastName, imageUrl).run();
+			'INSERT INTO users (id, first_name, last_name, image_url, role) VALUES (?, ?, ?, ?, ?)'
+		).bind(id, firstName, lastName, imageUrl, 'user').run();
 	}
 }
 

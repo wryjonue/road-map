@@ -1,65 +1,102 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/react';
-import { BarController, BarElement, CategoryScale, Chart, Filler, LineController, LineElement, LinearScale, PointElement, Tooltip } from 'chart.js';
-import MonthlyIncidentReport from '../components/MonthlyIncidentReport';
+import { ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Filler, Legend, LineController, LineElement, LinearScale, PointElement, Tooltip } from 'chart.js';
 import PendingReportsTable from '../components/PendingReportsTable';
 import ArchivedReportsTable from '../components/ArchivedReportsTable';
 import { useAppRole, canManageReports } from '../auth/roles';
 import { buildDashboardCsv, downloadCsv, exportFilename } from '../utils/exportCsv';
+import { generateDashboardPdf } from '../utils/exportPdf';
 import styles from './Dashboard.module.css';
 
-Chart.register(BarController, BarElement, CategoryScale, Filler, LineController, LineElement, LinearScale, PointElement, Tooltip);
+Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, Filler, Legend, LineController, LineElement, LinearScale, PointElement, Tooltip);
 
-// Mockup colors for categories: Accident (Orange), Road damage (Yellow), Construction (Blue), Closure (Purple)
-// Mapping to existing categories roughly or using a palette
 const CATEGORY_COLORS = ['#f97316', '#eab308', '#3b82f6', '#8b5cf6', '#10b981', '#ec4899', '#6366f1', '#14b8a6', '#64748b'];
+const STATUS_COLORS = {
+	Open: '#3b82f6',
+	Resolved: '#10b981',
+	Pending: '#eab308',
+	Rejected: '#ef4444',
+};
+
+function getMonthOptions() {
+	const options = [];
+	const now = new Date();
+	for (let i = 0; i < 12; i++) {
+		const date = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i, 1));
+		const value = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+		const label = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
+		options.push({ value, label });
+	}
+	return options;
+}
+
+function formatTrend(value) {
+	if (value === null || value === undefined) return { text: '—', className: '' };
+	const sign = value > 0 ? '+' : '';
+	return { text: `${sign}${value}%`, className: value >= 0 ? styles.trendUp : styles.trendDown };
+}
 
 export default function Dashboard() {
 	const { getToken, isLoaded, isSignedIn } = useAuth();
 	const { isLoaded: roleLoaded, role } = useAppRole();
 	const canManage = roleLoaded && canManageReports(role);
-	const chartCanvas = useRef(null);
-	const dailyChartCanvas = useRef(null);
-	const [metrics, setMetrics] = useState(null);
-	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState('');
-	const [monthlySnapshot, setMonthlySnapshot] = useState(null);
 
+	const [selectedMonth, setSelectedMonth] = useState(() => {
+		const now = new Date();
+		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+	});
+	const [selectedMunicipality, setSelectedMunicipality] = useState('all');
+	const [data, setData] = useState(null);
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState('');
+	const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+	const categoryChartRef = useRef(null);
+	const statusChartRef = useRef(null);
+	const municipalityChartRef = useRef(null);
+	const dailyChartRef = useRef(null);
+	const dashboardRef = useRef(null);
+
+	const monthOptions = getMonthOptions();
+	const municipalities = data?.municipalities ?? [];
+
+	// Fetch monthly report data
 	useEffect(() => {
 		if (!isLoaded) return undefined;
 		const controller = new AbortController();
-		const loadMetrics = async () => {
+		const loadReport = async () => {
 			setIsLoading(true);
 			setError('');
+			setData(null);
 			try {
 				const token = isSignedIn ? await getToken() : null;
-				const response = await fetch('/api/dashboard/metrics', {
+				const response = await fetch(`/api/dashboard/monthly-report?month=${encodeURIComponent(selectedMonth)}&municipality=${encodeURIComponent(selectedMunicipality)}`, {
 					headers: token ? { Authorization: `Bearer ${token}` } : {},
 					signal: controller.signal,
 				});
-				const data = await response.json();
-				if (!response.ok) throw new Error(data.error || 'Unable to load dashboard metrics');
-				if (!controller.signal.aborted) setMetrics(data);
+				const result = await response.json();
+				if (!response.ok) throw new Error(result.error || 'Unable to load monthly report');
+				if (!controller.signal.aborted) setData(result);
 			} catch (loadError) {
-				if (loadError.name !== 'AbortError') setError(loadError.message || 'Unable to load dashboard metrics');
+				if (loadError.name !== 'AbortError') setError(loadError.message || 'Unable to load monthly report');
 			} finally {
 				if (!controller.signal.aborted) setIsLoading(false);
 			}
 		};
-		void loadMetrics();
+		void loadReport();
 		return () => controller.abort();
-	}, [getToken, isLoaded, isSignedIn]);
+	}, [getToken, isLoaded, isSignedIn, selectedMonth, selectedMunicipality]);
 
-	// Incidents by Category Chart (Horizontal Bar)
+	// Category Chart (Horizontal Bar)
 	useEffect(() => {
-		if (!chartCanvas.current || !metrics) return undefined;
-		const chart = new Chart(chartCanvas.current, {
+		if (!categoryChartRef.current || !data?.byCategory?.length) return undefined;
+		const chart = new Chart(categoryChartRef.current, {
 			type: 'bar',
 			data: {
-				labels: metrics.categories.map((category) => category.name),
+				labels: data.byCategory.map((c) => c.name),
 				datasets: [{
 					label: 'Reports',
-					data: metrics.categories.map((category) => category.count),
+					data: data.byCategory.map((c) => c.total),
 					backgroundColor: CATEGORY_COLORS,
 					borderRadius: 4,
 					borderSkipped: false,
@@ -73,57 +110,102 @@ export default function Dashboard() {
 				layout: { padding: { right: 20 } },
 				plugins: {
 					legend: { display: false },
-					tooltip: { displayColors: false, callbacks: { label: (context) => ` ${context.parsed.x} reports` } },
+					tooltip: { displayColors: false, callbacks: { label: (ctx) => ` ${ctx.parsed.x} reports` } },
 				},
 				scales: {
-					x: { 
-						beginAtZero: true, 
-						ticks: { precision: 0, display: false }, 
-						grid: { display: false },
-						border: { display: false }
-					},
-					y: { 
-						grid: { display: false }, 
-						ticks: { autoSkip: false, color: '#64748b', font: { size: 11 } },
-						border: { display: false }
-					},
+					x: { beginAtZero: true, ticks: { display: false }, grid: { display: false }, border: { display: false } },
+					y: { grid: { display: false }, ticks: { autoSkip: false, color: '#64748b', font: { size: 11 } }, border: { display: false } },
 				},
 			},
 			plugins: [{
 				id: 'valueLabels',
-				afterDatasetsDraw(chart) {
-					const { ctx } = chart;
-					chart.data.datasets.forEach((dataset, i) => {
-						const meta = chart.getDatasetMeta(i);
+				afterDatasetsDraw(chartInstance) {
+					const { ctx } = chartInstance;
+					chartInstance.data.datasets.forEach((dataset, i) => {
+						const meta = chartInstance.getDatasetMeta(i);
 						meta.data.forEach((bar, index) => {
-							const value = dataset.data[index];
 							ctx.fillStyle = '#0f172a';
 							ctx.font = 'bold 11px Inter, sans-serif';
 							ctx.textAlign = 'left';
 							ctx.textBaseline = 'middle';
-							ctx.fillText(value, bar.x + 8, bar.y);
+							ctx.fillText(dataset.data[index], bar.x + 8, bar.y);
 						});
 					});
-				}
-			}]
+				},
+			}],
 		});
 		return () => chart.destroy();
-	}, [metrics]);
+	}, [data]);
 
-	// Reports per Day Chart (Line)
+	// Status Chart (Doughnut)
 	useEffect(() => {
-		if (!dailyChartCanvas.current || !metrics) return undefined;
-		const dailyReports = metrics.dailyReports ?? [];
-		// Limit to last 7 days for the mockup look if data allows, or just show all
-		const displayData = dailyReports.slice(-7);
-		
-		const chart = new Chart(dailyChartCanvas.current, {
-			type: 'line',
+		if (!statusChartRef.current || !data?.byStatus?.length) return undefined;
+		const chart = new Chart(statusChartRef.current, {
+			type: 'doughnut',
 			data: {
-				labels: displayData.map((report) => new Intl.DateTimeFormat('en', { day: 'numeric', timeZone: 'UTC' }).format(new Date(`${report.day}T00:00:00Z`))),
+				labels: data.byStatus.map((s) => s.status),
+				datasets: [{
+					data: data.byStatus.map((s) => s.count),
+					backgroundColor: data.byStatus.map((s) => STATUS_COLORS[s.status] || '#64748b'),
+					borderWidth: 0,
+					hoverOffset: 4,
+				}],
+			},
+			options: {
+				maintainAspectRatio: false,
+				responsive: true,
+				cutout: '65%',
+				plugins: {
+					legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 11 } } },
+					tooltip: { displayColors: true, callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${Math.round((ctx.parsed / ctx.dataset.data.reduce((a, b) => a + b, 0)) * 100)}%)` } },
+				},
+			},
+		});
+		return () => chart.destroy();
+	}, [data]);
+
+	// Municipality Chart (Vertical Bar)
+	useEffect(() => {
+		if (!municipalityChartRef.current || !data?.byMunicipality?.length) return undefined;
+		const topMunicipalities = data.byMunicipality.slice(0, 10);
+		const chart = new Chart(municipalityChartRef.current, {
+			type: 'bar',
+			data: {
+				labels: topMunicipalities.map((m) => m.municipality),
 				datasets: [{
 					label: 'Reports',
-					data: displayData.map((report) => report.count),
+					data: topMunicipalities.map((m) => m.count),
+					backgroundColor: '#6366f1',
+					borderRadius: 4,
+					borderSkipped: false,
+				}],
+			},
+			options: {
+				maintainAspectRatio: false,
+				responsive: true,
+				plugins: {
+					legend: { display: false },
+					tooltip: { displayColors: false, callbacks: { label: (ctx) => ` ${ctx.parsed.y} reports` } },
+				},
+				scales: {
+					y: { beginAtZero: true, ticks: { precision: 0, color: '#94a3b8', font: { size: 10 } }, grid: { color: '#f1f5f9' }, border: { display: false } },
+					x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 }, border: { display: false } },
+				},
+			},
+		});
+		return () => chart.destroy();
+	}, [data]);
+
+	// Daily Trend Chart (Line)
+	useEffect(() => {
+		if (!dailyChartRef.current || !data?.dailyReports?.length) return undefined;
+		const chart = new Chart(dailyChartRef.current, {
+			type: 'line',
+			data: {
+				labels: data.dailyReports.map((r) => new Intl.DateTimeFormat('en', { day: 'numeric', timeZone: 'UTC' }).format(new Date(`${r.day}T00:00:00Z`))),
+				datasets: [{
+					label: 'Reports',
+					data: data.dailyReports.map((r) => r.count),
 					borderColor: '#f97316',
 					backgroundColor: (context) => {
 						const ctx = context.chart.ctx;
@@ -146,69 +228,105 @@ export default function Dashboard() {
 				responsive: true,
 				plugins: {
 					legend: { display: false },
-					tooltip: { displayColors: false, callbacks: { label: (context) => ` ${context.parsed.y} reports` } },
+					tooltip: { displayColors: false, callbacks: { label: (ctx) => ` ${ctx.parsed.y} reports` } },
 				},
 				scales: {
-					y: { 
-						beginAtZero: true, 
-						ticks: { precision: 0, color: '#94a3b8', font: { size: 10 } }, 
-						grid: { color: '#f1f5f9' },
-						border: { display: false }
-					},
-					x: { 
-						grid: { display: false },
-						ticks: { color: '#94a3b8', font: { size: 10 } },
-						border: { display: false }
-					},
+					y: { beginAtZero: true, ticks: { precision: 0, color: '#94a3b8', font: { size: 10 } }, grid: { color: '#f1f5f9' }, border: { display: false } },
+					x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } }, border: { display: false } },
 				},
 			},
 		});
 		return () => chart.destroy();
-	}, [metrics]);
+	}, [data]);
 
-	// Calculate active reports (Total - Resolved)
-	const activeReports = metrics ? (metrics.total - metrics.resolved) : 0;
+	const activeReports = data ? Math.max(data.total - data.resolved, 0) : 0;
+	const monthLabel = monthOptions.find((o) => o.value === selectedMonth)?.label || selectedMonth;
+	const totalTrend = formatTrend(data?.trends?.totalChange);
+	const resolvedTrend = formatTrend(data?.trends?.resolvedChange);
+	const rateTrend = formatTrend(data?.trends?.rateChange);
+	const resolutionRate = data && data.total ? Math.round((data.resolved / data.total) * 1000) / 10 : 0;
 
-	// Compute current and previous month labels from the actual date
-	const now = new Date();
-	const currentMonthLabel = new Intl.DateTimeFormat('en', { month: 'long', timeZone: 'UTC' }).format(
-		new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1))
-	);
-	const prevMonthDate = new Date(Date.UTC(now.getFullYear(), now.getMonth() - 1, 1));
-	const prevMonthLabel = new Intl.DateTimeFormat('en', { month: 'long', timeZone: 'UTC' }).format(prevMonthDate);
-	
-	// Mock trend data since API doesn't provide it yet
-	const totalTrend = '+12.3%';
-	const resolvedTrend = '+20.0%';
-	const rateTrend = '+5.0 pts';
-
-	const handleExport = () => {
+	const handleExportCsv = () => {
 		const csv = buildDashboardCsv({
-			metrics,
-			monthly: monthlySnapshot,
-			monthLabel: currentMonthLabel,
-			year: now.getFullYear(),
+			metrics: data ? { total: data.total, resolved: data.resolved, resolvedPercentage: resolutionRate, categories: data.byCategory.map((c) => ({ name: c.name, count: c.total })), dailyReports: data.dailyReports } : null,
+			monthly: { month: selectedMonth, municipality: selectedMunicipality, data },
+			monthLabel,
+			year: Number(selectedMonth.split('-')[0]),
 			exportedAt: new Date().toLocaleString(),
 		});
-		downloadCsv(exportFilename(now), csv);
+		downloadCsv(exportFilename(new Date()), csv);
+	};
+
+	const handleExportPdf = async () => {
+		if (!dashboardRef.current || !data) return;
+		setIsExportingPdf(true);
+		try {
+			await generateDashboardPdf(dashboardRef.current, {
+				monthLabel,
+				municipality: selectedMunicipality === 'all' ? 'All Municipalities' : selectedMunicipality,
+				generatedAt: new Date().toLocaleString(),
+			});
+		} catch (err) {
+			console.error('PDF export failed:', err);
+			setError('Failed to generate PDF. Please try again.');
+		} finally {
+			setIsExportingPdf(false);
+		}
 	};
 
 	return (
-		<div className={styles.dashboardContainer}>
+		<div className={styles.dashboardContainer} ref={dashboardRef}>
 			{/* Overview Header */}
-			<div className={styles.overviewHeader}>
-				<h2 className={styles.overviewTitle}>{currentMonthLabel} overview</h2>
+			<div className={`${styles.overviewHeader} ${styles.noPrint}`}>
+				<h2 className={styles.overviewTitle}>{monthLabel} overview</h2>
 				<div className={styles.overviewActions}>
+					<select
+						className={styles.filterSelect}
+						value={selectedMonth}
+						onChange={(e) => setSelectedMonth(e.target.value)}
+						aria-label="Select month"
+					>
+						{monthOptions.map((option) => (
+							<option key={option.value} value={option.value}>{option.label}</option>
+						))}
+					</select>
+					<select
+						className={styles.filterSelect}
+						value={selectedMunicipality}
+						onChange={(e) => setSelectedMunicipality(e.target.value)}
+						aria-label="Filter by municipality"
+					>
+						<option value="all">All municipalities</option>
+						{municipalities.map((m) => (
+							<option key={m} value={m}>{m}</option>
+						))}
+					</select>
 					<span className={styles.activeBadge}>{activeReports} active reports</span>
 					<button
 						type="button"
 						className={`secondary-btn ${styles.exportBtn}`}
-						onClick={handleExport}
-						disabled={!metrics}
+						onClick={handleExportCsv}
+						disabled={!data || isLoading}
 						aria-label="Export dashboard data as CSV"
 					>
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-						Export CSV
+						CSV
+					</button>
+					<button
+						type="button"
+						className={`primary-btn ${styles.exportBtn}`}
+						onClick={handleExportPdf}
+						disabled={!data || isLoading || isExportingPdf}
+						aria-label="Generate PDF report"
+					>
+						{isExportingPdf ? (
+							<>Generating...</>
+						) : (
+							<>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+								PDF Report
+							</>
+						)}
 					</button>
 				</div>
 			</div>
@@ -225,10 +343,10 @@ export default function Dashboard() {
 						</div>
 					</div>
 					<div className={styles.cardValueRow}>
-						<strong className={styles.cardValue}>{metrics ? metrics.total.toLocaleString() : '—'}</strong>
-						<span className={styles.trendBadge}>{totalTrend}</span>
+						<strong className={styles.cardValue}>{data ? data.total.toLocaleString() : '—'}</strong>
+						{data && <span className={`${styles.trendBadge} ${totalTrend.className}`}>{totalTrend.text}</span>}
 					</div>
-					<p className={styles.cardSubtitle}>This month · 114 in {prevMonthLabel}</p>
+					<p className={styles.cardSubtitle}>{data ? `${data.previous?.total ?? 0} in previous month` : 'Loading...'}</p>
 				</div>
 
 				<div className={`${styles.metricCard} ${styles.whiteCard}`}>
@@ -239,10 +357,10 @@ export default function Dashboard() {
 						</div>
 					</div>
 					<div className={styles.cardValueRow}>
-						<strong className={styles.cardValue}>{metrics ? metrics.resolved.toLocaleString() : '—'}</strong>
-						<span className={styles.trendBadge}>{resolvedTrend}</span>
+						<strong className={styles.cardValue}>{data ? data.resolved.toLocaleString() : '—'}</strong>
+						{data && <span className={`${styles.trendBadge} ${resolvedTrend.className}`}>{resolvedTrend.text}</span>}
 					</div>
-					<p className={styles.cardSubtitle}>This month · 80 in {prevMonthLabel}</p>
+					<p className={styles.cardSubtitle}>{data ? `${data.previous?.resolved ?? 0} in previous month` : 'Loading...'}</p>
 				</div>
 
 				<div className={`${styles.metricCard} ${styles.darkCard}`}>
@@ -253,63 +371,107 @@ export default function Dashboard() {
 						</div>
 					</div>
 					<div className={styles.cardValueRow}>
-						<strong className={styles.cardValueLight}>{metrics ? `${metrics.resolvedPercentage.toFixed(0)}%` : '—'}</strong>
-						<span className={styles.trendBadgeDark}>{rateTrend}</span>
+						<strong className={styles.cardValueLight}>{data ? `${resolutionRate}%` : '—'}</strong>
+						{data && <span className={`${styles.trendBadgeDark} ${rateTrend.className}`}>{rateTrend.text}</span>}
 					</div>
-					<p className={styles.cardSubtitleLight}>Up from 70% in {prevMonthLabel}</p>
+					<p className={styles.cardSubtitleLight}>Month-over-month change</p>
 				</div>
 			</div>
 
 			{isLoading && <p className={styles.state} role="status">Loading report metrics...</p>}
 
-			{/* Charts Row */}
+			{/* Charts Grid */}
 			<div className={styles.chartsGrid}>
 				<section className={`${styles.chartCard} ${styles.whiteCard}`} aria-labelledby="daily-chart-heading">
 					<div className={styles.chartHeader}>
 						<div>
-							<h3 id="daily-chart-heading" className={styles.chartTitle}>Reports per day</h3>
-							<p className={styles.chartSubtitle}>{metrics?.dailyReports?.reduce((s, r) => s + r.count, 0) ?? 0} reports · {currentMonthLabel}</p>
+							<h3 id="daily-chart-heading" className={styles.chartTitle}>Daily report count</h3>
+							<p className={styles.chartSubtitle}>{data?.dailyReports?.reduce((s, r) => s + r.count, 0) ?? 0} reports</p>
 						</div>
-						<span className={styles.filterBadge}>Last 7 days</span>
 					</div>
 					<div className={styles.chartFrame}>
-						<canvas ref={dailyChartCanvas} role="img" aria-label="Line chart of reports per day" />
+						<canvas ref={dailyChartRef} role="img" aria-label="Line chart of daily report counts" />
 					</div>
-					{!isLoading && !error && (metrics?.dailyReports?.length ?? 0) === 0 && <p className={styles.emptyState}>No reports to display yet.</p>}
+					{!isLoading && !error && (data?.dailyReports?.length ?? 0) === 0 && <p className={styles.emptyState}>No reports to display yet.</p>}
 				</section>
 
 				<section className={`${styles.chartCard} ${styles.whiteCard}`} aria-labelledby="category-chart-heading">
 					<div className={styles.chartHeader}>
 						<div>
-							<h3 id="category-chart-heading" className={styles.chartTitle}>Incidents by category</h3>
-							<p className={styles.chartSubtitle}>{currentMonthLabel} {now.getFullYear()} · {metrics?.total ?? 0} total reports</p>
+							<h3 id="category-chart-heading" className={styles.chartTitle}>By category</h3>
+							<p className={styles.chartSubtitle}>{data?.total ?? 0} total reports</p>
 						</div>
 					</div>
 					<div className={styles.chartFrame}>
-						<canvas ref={chartCanvas} role="img" aria-label="Bar chart of report counts by category" />
+						<canvas ref={categoryChartRef} role="img" aria-label="Bar chart of report counts by category" />
 					</div>
-					{!isLoading && !error && metrics?.total === 0 && <p className={styles.emptyState}>No reports to display yet.</p>}
+					{!isLoading && !error && (data?.byCategory?.length ?? 0) === 0 && <p className={styles.emptyState}>No categories to display.</p>}
+				</section>
+
+				<section className={`${styles.chartCard} ${styles.whiteCard}`} aria-labelledby="status-chart-heading">
+					<div className={styles.chartHeader}>
+						<div>
+							<h3 id="status-chart-heading" className={styles.chartTitle}>By status</h3>
+							<p className={styles.chartSubtitle}>status</p>
+						</div>
+					</div>
+					<div className={styles.chartFrame}>
+						<canvas ref={statusChartRef} role="img" aria-label="Doughnut chart of report status distribution" />
+					</div>
+					{!isLoading && !error && (data?.byStatus?.length ?? 0) === 0 && <p className={styles.emptyState}>No status data available.</p>}
+				</section>
+
+				<section className={`${styles.chartCard} ${styles.whiteCard}`} aria-labelledby="municipality-chart-heading">
+					<div className={styles.chartHeader}>
+						<div>
+							<h3 id="municipality-chart-heading" className={styles.chartTitle}>Top municipalities</h3>
+							<p className={styles.chartSubtitle}>Area</p>
+						</div>
+					</div>
+					<div className={styles.chartFrame}>
+						<canvas ref={municipalityChartRef} role="img" aria-label="Bar chart of top municipalities by report count" />
+					</div>
+					{!isLoading && !error && (data?.byMunicipality?.length ?? 0) === 0 && <p className={styles.emptyState}>No municipality data available.</p>}
 				</section>
 			</div>
 
+			{/* Accessible Data Table (hidden visually, visible to screen readers and PDF) */}
+			{data && (
+				<div className={styles.srOnly}>
+					<table>
+						<caption>Monthly Report Data for {monthLabel}</caption>
+						<thead><tr><th>Category</th><th>Total</th><th>Resolved</th><th>Active</th></tr></thead>
+						<tbody>
+							{data.byCategory.map((c) => (
+								<tr key={c.name}><td>{c.name}</td><td>{c.total}</td><td>{c.resolved}</td><td>{c.active}</td></tr>
+							))}
+						</tbody>
+					</table>
+					<table>
+						<caption>Status Breakdown</caption>
+						<thead><tr><th>Status</th><th>Count</th></tr></thead>
+						<tbody>
+							{data.byStatus.map((s) => (
+								<tr key={s.status}><td>{s.status}</td><td>{s.count}</td></tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
+
 			{/* Pending review (managers only) */}
 			{canManage && (
-				<div className={styles.reportSection}>
+				<div className={`${styles.reportSection} ${styles.noPrint}`}>
 					<PendingReportsTable />
 				</div>
 			)}
 
 			{/* Recently archived (managers only) */}
 			{canManage && (
-				<div className={styles.reportSection}>
+				<div className={`${styles.reportSection} ${styles.noPrint}`}>
 					<ArchivedReportsTable />
 				</div>
 			)}
-
-			{/* Monthly Incident Report */}
-			<div className={styles.reportSection}>
-				<MonthlyIncidentReport onSnapshotChange={setMonthlySnapshot} />
-			</div>
 		</div>
 	);
 }

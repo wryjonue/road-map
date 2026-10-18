@@ -114,7 +114,11 @@ async function resolveUser(clerkId) {
 			}
 		}
 
-		return { id: user.id, firstName, lastName, imageUrl };
+		let role = 'user';
+		if (user.publicMetadata && typeof user.publicMetadata.role === 'string') {
+			role = user.publicMetadata.role;
+		}
+		return { id: user.id, firstName, lastName, imageUrl, role };
 	} catch (err) {
 		// 404 means the user was deleted from Clerk — skip them.
 		if (err.status === 404 || err.clerkError) return null;
@@ -193,7 +197,7 @@ async function main() {
 		const ln = escapeSqlString(user.lastName);
 		const img = escapeSqlString(user.imageUrl);
 		sqlLines.push(
-			`INSERT INTO users (id, first_name, last_name, image_url) VALUES (${id}, ${fn}, ${ln}, ${img}) ON CONFLICT(id) DO UPDATE SET first_name = excluded.first_name, last_name = excluded.last_name, image_url = excluded.image_url, updated_at = CURRENT_TIMESTAMP;`
+			`INSERT INTO users (id, first_name, last_name, image_url, role) VALUES (${id}, ${fn}, ${ln}, ${img}, ${escapeSqlString(user.role)}) ON CONFLICT(id) DO UPDATE SET first_name = excluded.first_name, last_name = excluded.last_name, image_url = excluded.image_url, role = excluded.role, updated_at = CURRENT_TIMESTAMP;`
 		);
 	}
 	const sql = sqlLines.join('\n') + '\n';

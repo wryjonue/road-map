@@ -419,7 +419,7 @@ async function createStaticMap(env, reportId, longitude, latitude, routeGeometry
 
 
 
-export async function createReport(request, env, auth) {
+export async function createReport(request, env, auth, ctx) {
 	const contentLength = Number(request.headers.get('Content-Length'));
 	if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_SIZE) return errorResponse('Request is too large');
 	let body; try { body = await parseBody(request); } catch { return errorResponse('Request body must be valid JSON or multipart form data'); }
@@ -475,8 +475,9 @@ export async function createReport(request, env, auth) {
 		// Failures leave the report as Pending for manual review.
 		const renderUrl = env.RENDER_AI_SERVICE_URL;
 		if (renderUrl) {
-			// Production: fire-and-forget webhook to Render AI service with retry
-			(async () => {
+			// Production: fire-and-forget webhook to Render AI service with retry.
+			// Uses ctx.waitUntil() so the Worker stays alive after responding to the client.
+				const moderationTask = (async () => {
 				const maxRetries = 2;
 				for (let attempt = 0; attempt <= maxRetries; attempt++) {
 					try {
@@ -501,20 +502,38 @@ export async function createReport(request, env, auth) {
 						const sigBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(bodyStr));
 						const signature = Array.from(new Uint8Array(sigBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
 
-						console.log('[report] Sending moderation webhook to Render for report:', reportId, 'attempt:', attempt);
+						// Use longer timeout for first attempt to accommodate Render cold start (free tier sleeps after inactivity)
+						const timeoutMs = attempt === 0 ? 60000 : 15000;
+						console.log('[report] Sending moderation webhook to Render for report:', reportId, 'attempt:', attempt, 'timeout:', timeoutMs + 'ms');
+						console.log('[report] Render URL:', renderUrl);
+						console.log('[report] Payload size:', bodyStr.length, 'bytes');
+						console.log('[report] Signature (first 32 chars):', signature.slice(0, 32));
 						const controller = new AbortController();
-						const timeout = setTimeout(() => controller.abort(), 10000);
-						const response = await fetch(renderUrl, {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json', 'x-webhook-signature': signature },
-							body: bodyStr,
-							signal: controller.signal,
-						});
+						const timeout = setTimeout(() => {
+							console.error('[report] Render webhook TIMEOUT after', timeoutMs, 'ms for report:', reportId, 'attempt:', attempt);
+							controller.abort();
+						}, timeoutMs);
+						let response;
+						try {
+							response = await fetch(renderUrl, {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json', 'x-webhook-signature': signature },
+								body: bodyStr,
+								signal: controller.signal,
+							});
+						} catch (fetchErr) {
+							clearTimeout(timeout);
+							console.error('[report] Fetch THREW for report:', reportId, 'attempt:', attempt, 'error:', fetchErr?.message || String(fetchErr));
+							throw fetchErr;
+						}
 						clearTimeout(timeout);
+						console.log('[report] Render responded with status:', response.status, 'for report:', reportId, 'attempt:', attempt);
 						if (!response.ok) {
-							console.error('[report] Render webhook failed:', response.status, await response.text(), 'attempt:', attempt);
+							const errText = await response.text();
+							console.error('[report] Render webhook FAILED:', response.status, errText.slice(0, 500), 'attempt:', attempt);
 						} else {
-							console.log('[report] Render webhook sent successfully for report:', reportId, 'attempt:', attempt);
+							const okText = await response.text();
+							console.log('[report] Render webhook SUCCESS for report:', reportId, 'attempt:', attempt, 'response:', okText.slice(0, 200));
 							return; // Success — exit retry loop
 						}
 					} catch (err) {
@@ -528,9 +547,15 @@ export async function createReport(request, env, auth) {
 				}
 				console.error('[report] Render webhook exhausted all retries for report:', reportId);
 			})();
+			if (ctx?.waitUntil) {
+				ctx.waitUntil(moderationTask);
+			} else {
+				console.warn('[report] ctx.waitUntil not available; moderation may be terminated early');
+			}
 		} else {
-			// Local dev: run moderation synchronously in-worker
-			(async () => {
+			// Local dev: run moderation synchronously in-worker.
+			// Uses ctx.waitUntil() so wrangler dev also keeps the Worker alive.
+			const localModerationTask = (async () => {
 				try {
 					const categoryRow = await env.road_map_db.prepare('SELECT name FROM categories WHERE id = ?').bind(categoryId).first();
 					const moderation = await moderateReport(env, {
@@ -561,6 +586,9 @@ export async function createReport(request, env, auth) {
 					console.error('[report] Local AI moderation failed for report', reportId, ':', err);
 				}
 			})();
+			if (ctx?.waitUntil) {
+				ctx.waitUntil(localModerationTask);
+			}
 		}
 
 		return getReport(env, reportId, 201, auth);

@@ -28,6 +28,21 @@
     flex-wrap: wrap;
 }
 
+.filterSelect {
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-light);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.filterSelect:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+
 .activeBadge {
     background: var(--primary-soft);
     color: var(--primary);
@@ -136,8 +151,6 @@
 }
 
 .trendBadge {
-    background: rgba(16, 185, 129, 0.1);
-    color: #059669;
     padding: 2px 8px;
     border-radius: 9999px;
     font-size: 0.75rem;
@@ -147,18 +160,31 @@
     gap: 2px;
 }
 
-.trendBadge::before {
-    content: '↗';
-    font-size: 0.7rem;
+.trendUp {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+}
+
+.trendDown {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
 }
 
 .trendBadgeDark {
-    background: rgba(16, 185, 129, 0.2);
-    color: #34d399;
     padding: 2px 8px;
     border-radius: 9999px;
     font-size: 0.75rem;
     font-weight: 600;
+}
+
+.trendBadgeDark.trendUp {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+}
+
+.trendBadgeDark.trendDown {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
 }
 
 .cardSubtitle {
@@ -176,7 +202,7 @@
 /* Charts Grid */
 .chartsGrid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 20px;
     min-width: 0;
 }
@@ -189,6 +215,10 @@
     gap: 20px;
     min-width: 0;
 }
+
+/* .fullWidthChart {
+    grid-column: 1 / -1;
+} */
 
 .chartHeader {
     display: flex;
@@ -207,15 +237,6 @@
     margin: 0;
     font-size: 0.75rem;
     color: var(--text-muted);
-}
-
-.filterBadge {
-    background: var(--bg-app);
-    color: var(--text-muted);
-    padding: 4px 10px;
-    border-radius: 9999px;
-    font-size: 0.7rem;
-    font-weight: 500;
 }
 
 .chartFrame {
@@ -256,10 +277,38 @@
     border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
+/* Accessibility: Screen-reader only content */
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Print / PDF Export Styles */
+.noPrint {
+    /* Marker class; toggled via JS during PDF capture */
+}
+
+@media print {
+    .noPrint {
+        display: none !important;
+    }
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .chartsGrid {
         grid-template-columns: 1fr;
+    }
+
+    .fullWidthChart {
+        grid-column: auto;
     }
 }
 
@@ -267,8 +316,17 @@
     .metricsGrid {
         grid-template-columns: 1fr;
     }
-    
+
     .cardValue, .cardValueLight {
         font-size: 2rem;
+    }
+
+    .overviewHeader {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .overviewActions {
+        justify-content: flex-start;
     }
 }
