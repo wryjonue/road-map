@@ -29,3 +29,6 @@ dist-ssr
 !.dev.vars.example
 .env*
 !.env.example
+
+# For Agent's Eyes
+render-ai-service/

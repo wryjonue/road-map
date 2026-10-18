@@ -8,6 +8,7 @@ import { getRecentHistory, saveMessage, clearHistory } from './chat-service.js';
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
 import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from './notification-service.js';
 import { handleClerkWebhook } from './clerk-webhook.js';
+import { handleAiModerationWebhook } from './webhook-service.js';
 
 // Durable Object classes must be exported from the Worker entry so Wrangler can bind them.
 export { NotificationHub } from './durable-objects/notification-hub.js';
@@ -20,6 +21,11 @@ export default {
 			// Clerk webhook endpoint — no auth required, signature verified internally.
 			if (url.pathname === '/api/webhooks/clerk') {
 				return handleClerkWebhook(request, env);
+			}
+			// AI moderation webhook from Render service — no user auth, HMAC verified internally.
+			if (url.pathname === '/api/webhooks/ai-moderation') {
+				if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				return handleAiModerationWebhook(request, env);
 			}
 			// WebSocket upgrade: per-user notification hub.
 			if (url.pathname === '/ws/notifications') {

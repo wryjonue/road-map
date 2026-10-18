@@ -192,7 +192,7 @@ Acceptance criteria:
 
 Treat AI as an assistive capability, not the authorization or final enforcement authority.
 
-**Status: Auto-approve/auto-reject implemented.**
+**Status: Auto-approve/auto-reject implemented with external Render service.**
 
 Implemented:
 - `[x]` Gemini multimodal moderation (`gemini-3.5-flash-lite`) runs fire-and-forget after report creation
@@ -202,12 +202,37 @@ Implemented:
 - `[x]` Notifications sent for auto-approved, auto-rejected, and needs-review outcomes via NotificationHub DO
 - `[x]` System comments record AI decisions with confidence percentage
 - `[x]` Failures default to `Pending`; never block report creation or silently discard reports
+- `[x]` External Render AI service with HMAC-SHA256 signed webhooks (production only)
+- `[x]` Replay-window protection (5-minute timestamp validation) on both Worker and Render endpoints
+- `[x]` Retry with exponential backoff on Worker→Render dispatch and Render→Worker callback
+- `[x]` Local dev fallback: in-worker moderation when `RENDER_AI_SERVICE_URL` is not set
+- `[x]` Integration test script (`scripts/test-ai-moderation.mjs`)
 
 Remaining:
 - `[ ]` Admin dashboard view for reviewing AI-flagged reports and overriding decisions
 - `[ ]` User appeal/correction workflow for AI-rejected reports
 - `[ ]` Dashboard AI summaries grounded in authorized aggregate data
 - `[ ]` Privacy notice and data retention policy for AI-processed content
+
+#### AI Moderation Production Deployment Runbook
+
+1. **Set Cloudflare Worker secrets:**
+   ```powershell
+   wrangler secret put AI_WEBHOOK_SECRET       # value: technoblade-never-dies
+   wrangler secret put RENDER_AI_SERVICE_URL    # value: https://<render-app>.onrender.com/moderate
+   ```
+
+2. **Set Render environment variables:**
+   - `GEMINI_API_KEY` — Google AI Studio API key
+   - `AI_WEBHOOK_SECRET` — must match Cloudflare secret exactly
+   - `WORKER_WEBHOOK_URL` — `https://<worker-domain>/api/webhooks/ai-moderation`
+   - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` — R2 read-only credentials
+
+3. **Deploy Render service:** Push `render-ai-service/` directory to connected repo or deploy manually.
+
+4. **Verify:** Run `node scripts/test-ai-moderation.mjs --execute` with appropriate env vars to confirm end-to-end flow.
+
+5. **Monitor:** Check Render logs for `[render]` prefixed entries and Worker logs for `[webhook]` / `[report]` entries. Failed retries are logged at error level.
 
 Acceptance criteria:
 

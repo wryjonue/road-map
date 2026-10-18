@@ -9,3 +9,11 @@ ENVIRONMENT=development
 # CLERK_WEBHOOK_SECRET is intentionally absent for local dev.
 # Local webhook sync is out of scope; the endpoint returns 503 without this secret.
 # Set via `wrangler secret put CLERK_WEBHOOK_SECRET` in production only.
+
+# AI Moderation: Render service URL and shared HMAC secret.
+# When RENDER_AI_SERVICE_URL is set, createReport dispatches moderation to Render.
+# When absent, moderation runs in-worker (local dev fallback).
+# RENDER_AI_SERVICE_URL=https://your-render-service.onrender.com/moderate
+# AI_WEBHOOK_SECRET must match the value configured in Render dashboard.
+# Set via `wrangler secret put AI_WEBHOOK_SECRET` in production.
+AI_WEBHOOK_SECRET=technoblade-never-dies

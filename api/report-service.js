@@ -471,97 +471,97 @@ export async function createReport(request, env, auth) {
 		const parsedRoute = routePolyline ? JSON.parse(routePolyline) : null;
 		staticMapKey = await createStaticMap(env, reportId, longitude, latitude, parsedRoute, resolvedStart?.longitude ?? longitude, resolvedStart?.latitude ?? latitude, resolvedDest?.longitude ?? longitude, resolvedDest?.latitude ?? latitude); await env.road_map_db.prepare('UPDATE reports SET static_map_r2_key = ?, static_map_url = ? WHERE id = ?').bind(staticMapKey, mediaUrl(staticMapKey), reportId).run();
 
-		// AI moderation: fire-and-forget after successful creation.
+		// AI moderation: dispatch to Render service (production) or run in-worker (local dev).
 		// Failures leave the report as Pending for manual review.
-		// Ensure AI moderation runs even if client disconnects
-		const moderationPromise = (async () => {
-			console.log('[report] Starting AI moderation for report ID:', reportId, 'with imageKey:', imageKey);
-			try {
-				const categoryRow = await env.road_map_db.prepare('SELECT name FROM categories WHERE id = ?').bind(categoryId).first();
-				console.log('[report] Category lookup result:', categoryRow);
-				const moderation = await moderateReport(env, {
-					title,
-				description,
-				category: categoryRow?.name || 'Unknown',
-				imageR2Key: imageKey || null,
-				});
-				console.log('[report] ModerateReport returned:', moderation);
-				if (!moderation) {
-					console.warn('[report] Moderation returned null - skipping AI processing');
-					return;
+		const renderUrl = env.RENDER_AI_SERVICE_URL;
+		if (renderUrl) {
+			// Production: fire-and-forget webhook to Render AI service with retry
+			(async () => {
+				const maxRetries = 2;
+				for (let attempt = 0; attempt <= maxRetries; attempt++) {
+					try {
+						const categoryRow = await env.road_map_db.prepare('SELECT name FROM categories WHERE id = ?').bind(categoryId).first();
+						const webhookPayload = {
+							reportId,
+							title,
+							description,
+							category: categoryRow?.name || 'Unknown',
+							imageKey: imageKey || null,
+							authorId: auth.userId,
+							timestamp: new Date().toISOString(),
+						};
+						const secret = env.AI_WEBHOOK_SECRET;
+						if (!secret) {
+							console.error('[report] AI_WEBHOOK_SECRET not configured, skipping Render webhook');
+							return;
+						}
+						const bodyStr = JSON.stringify(webhookPayload);
+						const encoder = new TextEncoder();
+						const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+						const sigBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(bodyStr));
+						const signature = Array.from(new Uint8Array(sigBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
+
+						console.log('[report] Sending moderation webhook to Render for report:', reportId, 'attempt:', attempt);
+						const controller = new AbortController();
+						const timeout = setTimeout(() => controller.abort(), 10000);
+						const response = await fetch(renderUrl, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json', 'x-webhook-signature': signature },
+							body: bodyStr,
+							signal: controller.signal,
+						});
+						clearTimeout(timeout);
+						if (!response.ok) {
+							console.error('[report] Render webhook failed:', response.status, await response.text(), 'attempt:', attempt);
+						} else {
+							console.log('[report] Render webhook sent successfully for report:', reportId, 'attempt:', attempt);
+							return; // Success — exit retry loop
+						}
+					} catch (err) {
+						console.error('[report] Error sending Render webhook:', err, 'attempt:', attempt);
+					}
+					// Exponential backoff before retry
+					if (attempt < maxRetries) {
+						const delay = Math.pow(2, attempt) * 1000;
+						await new Promise((resolve) => setTimeout(resolve, delay));
+					}
 				}
+				console.error('[report] Render webhook exhausted all retries for report:', reportId);
+			})();
+		} else {
+			// Local dev: run moderation synchronously in-worker
+			(async () => {
+				try {
+					const categoryRow = await env.road_map_db.prepare('SELECT name FROM categories WHERE id = ?').bind(categoryId).first();
+					const moderation = await moderateReport(env, {
+						title,
+						description,
+						category: categoryRow?.name || 'Unknown',
+						imageR2Key: imageKey || null,
+					});
+					if (!moderation) return;
 
-			const now = new Date().toISOString();
-			await env.road_map_db.prepare(
-				'UPDATE reports SET ai_verdict = ?, ai_confidence = ?, ai_reason = ?, ai_reviewed_at = ? WHERE id = ?',
-			).bind(moderation.verdict, moderation.confidence, moderation.reason, now, reportId).run();
-			console.log('[report] Updated AI moderation metadata for report:', reportId);
+					const now = new Date().toISOString();
+					await env.road_map_db.prepare(
+						'UPDATE reports SET ai_verdict = ?, ai_confidence = ?, ai_reason = ?, ai_reviewed_at = ? WHERE id = ?',
+					).bind(moderation.verdict, moderation.confidence, moderation.reason, now, reportId).run();
 
-			if (moderation.verdict === 'approve' && !moderation.needsManualReview) {
-				console.log('[report] Auto-approving report:', reportId, 'confidence:', moderation.confidence);
-				await env.road_map_db.prepare("UPDATE reports SET status = 'Open', updated_at = ? WHERE id = ? AND status = 'Pending'").bind(now, reportId).run();
-				await createNotification(env, { userId: auth.userId, type: 'report_auto_approved', reportId, actorId: 'ai-system', message: 'Your report was auto-approved by AI and is now visible to the community.' });
-				await insertSystemComment(env, reportId, `AI auto-approved this report (confidence: ${Math.round(moderation.confidence * 100)}%).`);
-			} else if (moderation.verdict === 'reject' && !moderation.needsManualReview) {
-				console.log('[report] Auto-rejecting report:', reportId, 'confidence:', moderation.confidence, 'reason:', moderation.reason);
-				await env.road_map_db.prepare("UPDATE reports SET status = 'Rejected', updated_at = ?, archived_at = ? WHERE id = ? AND status = 'Pending'").bind(now, now, reportId).run();
-				await createNotification(env, { userId: auth.userId, type: 'report_auto_rejected', reportId, actorId: 'ai-system', message: `Your report was auto-rejected by AI. Reason: ${moderation.reason}` });
-				await insertSystemComment(env, reportId, `AI auto-rejected this report (confidence: ${Math.round(moderation.confidence * 100)}%). Reason: ${moderation.reason}`);
-			} else {
-				console.log('[report] Manual review required for report:', reportId, 'confidence:', moderation.confidence, 'needsManualReview:', moderation.needsManualReview);
-				// Needs manual review — stays Pending, notify admins.
-				await createNotification(env, { userId: auth.userId, type: 'report_needs_review', reportId, actorId: 'ai-system', message: `Your report requires manual review. AI confidence: ${Math.round(moderation.confidence * 100)}%.` });
-			}
-			console.log('[report] AI moderation completed for report:', reportId);
-		} catch (err) {
-			console.error('[report] AI moderation failed for report', reportId, 'Error:', String(err), 'Stack:', err?.stack);
+					if (moderation.verdict === 'approve' && !moderation.needsManualReview) {
+						await env.road_map_db.prepare("UPDATE reports SET status = 'Open', updated_at = ? WHERE id = ? AND status = 'Pending'").bind(now, reportId).run();
+						await createNotification(env, { userId: auth.userId, type: 'report_auto_approved', reportId, actorId: 'ai-system', message: 'Your report was auto-approved by AI and is now visible to the community.' });
+						await insertSystemComment(env, reportId, `AI auto-approved this report (confidence: ${Math.round(moderation.confidence * 100)}%).`);
+					} else if (moderation.verdict === 'reject' && !moderation.needsManualReview) {
+						await env.road_map_db.prepare("UPDATE reports SET status = 'Rejected', updated_at = ?, archived_at = ? WHERE id = ? AND status = 'Pending'").bind(now, now, reportId).run();
+						await createNotification(env, { userId: auth.userId, type: 'report_auto_rejected', reportId, actorId: 'ai-system', message: `Your report was auto-rejected by AI. Reason: ${moderation.reason}` });
+						await insertSystemComment(env, reportId, `AI auto-rejected this report (confidence: ${Math.round(moderation.confidence * 100)}%). Reason: ${moderation.reason}`);
+					} else {
+						await createNotification(env, { userId: auth.userId, type: 'report_needs_review', reportId, actorId: 'ai-system', message: `Your report requires manual review. AI confidence: ${Math.round(moderation.confidence * 100)}%.` });
+					}
+				} catch (err) {
+					console.error('[report] Local AI moderation failed for report', reportId, ':', err);
+				}
+			})();
 		}
-		})();
-
-		// Send webhook to Render AI service for moderation
-		(async () => {
-			try {
-				console.log('[report] Sending moderation webhook to Render for report:', reportId);
-					
-				// Get category name
-				const categoryRow = await env.road_map_db.prepare('SELECT name FROM categories WHERE id = ?').bind(categoryId).first();
-					
-				// Prepare webhook payload
-				const webhookPayload = {
-					reportId,
-					title,
-					description,
-					category: categoryRow?.name || 'Unknown',
-					imageKey: imageKey || null,
-					authorId: auth.userId,
-					timestamp: new Date().toISOString()
-				};
-					
-				// Generate signature (simplified for now)
-				const signature = crypto.createHmac('sha256', env.WEBHOOK_SECRET || 'fallback-secret').update(JSON.stringify(webhookPayload)).digest('hex');
-					
-				// Send to Render AI service
-				const response = await fetch(env.RENDER_AI_SERVICE_URL, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'X-Webhook-Signature': signature
-					},
-					body: JSON.stringify(webhookPayload)
-				});
-					
-				if (!response.ok) {
-					console.error('[report] Failed to send moderation webhook:', response.status, await response.text());
-				} else {
-					console.log('[report] Moderation webhook sent successfully to Render');
-				}
-			} catch (err) {
-				console.error('[report] Error sending moderation webhook:', err);
-			}
-		})();
-
-		// Return immediately to client
-		return;
 
 		return getReport(env, reportId, 201, auth);
 	} catch (error) {
