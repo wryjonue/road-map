@@ -198,7 +198,11 @@
     color: #94a3b8;
     font-size: 0.75rem;
 }
-
+h2.subHeading {
+    margin-bottom: 0px;
+    padding-left: 10px;
+    padding-bottom: 5px;
+}
 /* Charts Grid */
 .chartsGrid {
     display: grid;
@@ -299,6 +303,11 @@
     .noPrint {
         display: none !important;
     }
+}
+
+
+hr.divider {
+    width: 100%;
 }
 
 /* Responsive */

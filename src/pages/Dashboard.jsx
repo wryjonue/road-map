@@ -280,7 +280,7 @@ export default function Dashboard() {
 		<div className={styles.dashboardContainer} ref={dashboardRef}>
 			{/* Overview Header */}
 			<div className={`${styles.overviewHeader} ${styles.noPrint}`}>
-				<h2 className={styles.overviewTitle}>{monthLabel} overview</h2>
+				<h2 className={styles.overviewTitle}>Month: {monthLabel}</h2>
 				<div className={styles.overviewActions}>
 					<select
 						className={styles.filterSelect}
@@ -303,16 +303,15 @@ export default function Dashboard() {
 							<option key={m} value={m}>{m}</option>
 						))}
 					</select>
-					<span className={styles.activeBadge}>{activeReports} active reports</span>
 					<button
 						type="button"
-						className={`secondary-btn ${styles.exportBtn}`}
+						className={`primary-btn ${styles.exportBtn}`}
 						onClick={handleExportCsv}
 						disabled={!data || isLoading}
 						aria-label="Export dashboard data as CSV"
 					>
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-						CSV
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+						Export as Spreadsheet
 					</button>
 					<button
 						type="button"
@@ -326,7 +325,7 @@ export default function Dashboard() {
 						) : (
 							<>
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
-								PDF Report
+								Export as PDF
 							</>
 						)}
 					</button>
@@ -339,44 +338,43 @@ export default function Dashboard() {
 			<div className={styles.metricsGrid}>
 				<div className={`${styles.metricCard} ${styles.whiteCard}`}>
 					<div className={styles.cardHeader}>
-						<span className={styles.cardLabel}>Total reports</span>
-						<div className={styles.cardIcon}>
+						<span className={styles.cardLabel}>All Reports</span>
+						{/*<div className={styles.cardIcon}>
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-						</div>
+						</div>*/}
 					</div>
 					<div className={styles.cardValueRow}>
 						<strong className={styles.cardValue}>{data ? data.total.toLocaleString() : '—'}</strong>
 						{data && <span className={`${styles.trendBadge} ${totalTrend.className}`}>{totalTrend.text}</span>}
 					</div>
-					<p className={styles.cardSubtitle}>{data ? `${data.previous?.total ?? 0} in previous month` : 'Loading...'}</p>
+					
 				</div>
 
 				<div className={`${styles.metricCard} ${styles.whiteCard}`}>
 					<div className={styles.cardHeader}>
-						<span className={styles.cardLabel}>Resolved reports</span>
-						<div className={styles.cardIcon}>
+						<span className={styles.cardLabel}>Resolved Reports</span>
+						{/*<div className={styles.cardIcon}>
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-						</div>
+						</div>*/}
 					</div>
 					<div className={styles.cardValueRow}>
 						<strong className={styles.cardValue}>{data ? data.resolved.toLocaleString() : '—'}</strong>
 						{data && <span className={`${styles.trendBadge} ${resolvedTrend.className}`}>{resolvedTrend.text}</span>}
 					</div>
-					<p className={styles.cardSubtitle}>{data ? `${data.previous?.resolved ?? 0} in previous month` : 'Loading...'}</p>
+					
 				</div>
 
 				<div className={`${styles.metricCard} ${styles.darkCard}`}>
 					<div className={styles.cardHeader}>
-						<span className={styles.cardLabelLight}>Resolution rate</span>
-						<div className={styles.cardIconLight}>
+						<span className={styles.cardLabelLight}>Ratio</span>
+						{/*<div className={styles.cardIconLight}>
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
-						</div>
+						</div>*/}
 					</div>
 					<div className={styles.cardValueRow}>
 						<strong className={styles.cardValueLight}>{data ? `${resolutionRate}%` : '—'}</strong>
-						{data && <span className={`${styles.trendBadgeDark} ${rateTrend.className}`}>{rateTrend.text}</span>}
+						
 					</div>
-					<p className={styles.cardSubtitleLight}>Month-over-month change</p>
 				</div>
 			</div>
 
@@ -387,8 +385,7 @@ export default function Dashboard() {
 				<section className={`${styles.chartCard} ${styles.whiteCard}`} aria-labelledby="daily-chart-heading">
 					<div className={styles.chartHeader}>
 						<div>
-							<h3 id="daily-chart-heading" className={styles.chartTitle}>Daily report count</h3>
-							<p className={styles.chartSubtitle}>{data?.dailyReports?.reduce((s, r) => s + r.count, 0) ?? 0} reports</p>
+							<h3 id="daily-chart-heading" className={styles.chartTitle}>Report Counts</h3>
 						</div>
 					</div>
 					<div className={styles.chartFrame}>
@@ -400,8 +397,8 @@ export default function Dashboard() {
 				<section className={`${styles.chartCard} ${styles.whiteCard}`} aria-labelledby="category-chart-heading">
 					<div className={styles.chartHeader}>
 						<div>
-							<h3 id="category-chart-heading" className={styles.chartTitle}>By category</h3>
-							<p className={styles.chartSubtitle}>{data?.total ?? 0} total reports</p>
+							<h3 id="category-chart-heading" className={styles.chartTitle}>Categories</h3>
+							
 						</div>
 					</div>
 					<div className={styles.chartFrame}>
@@ -414,7 +411,6 @@ export default function Dashboard() {
 					<div className={styles.chartHeader}>
 						<div>
 							<h3 id="status-chart-heading" className={styles.chartTitle}>By status</h3>
-							<p className={styles.chartSubtitle}>status</p>
 						</div>
 					</div>
 					<div className={styles.chartFrame}>
@@ -427,7 +423,6 @@ export default function Dashboard() {
 					<div className={styles.chartHeader}>
 						<div>
 							<h3 id="municipality-chart-heading" className={styles.chartTitle}>Top municipalities</h3>
-							<p className={styles.chartSubtitle}>Area</p>
 						</div>
 					</div>
 					<div className={styles.chartFrame}>
@@ -436,7 +431,7 @@ export default function Dashboard() {
 					{!isLoading && !error && (data?.byMunicipality?.length ?? 0) === 0 && <p className={styles.emptyState}>No municipality data available.</p>}
 				</section>
 			</div>
-
+				
 			{/* Accessible Data Table (hidden visually, visible to screen readers and PDF) */}
 			{data && (
 				<div className={styles.srOnly}>
@@ -460,7 +455,7 @@ export default function Dashboard() {
 					</table>
 				</div>
 			)}
-
+			<h2>Enforcer-only Panel</h2>
 			{/* Pending review (managers only) */}
 			{canManage && (
 				<div className={`${styles.reportSection} ${styles.noPrint}`}>
@@ -474,8 +469,8 @@ export default function Dashboard() {
 					<ArchivedReportsTable />
 				</div>
 			)}
-
 			
+			<h2 className={`${styles.subHeading}`}>Admin-Only Panel</h2>
 
 			{/* Admin User Management (admin only) */}
 			{canAdmin && (
