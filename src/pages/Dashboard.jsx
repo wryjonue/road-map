@@ -455,28 +455,29 @@ export default function Dashboard() {
 					</table>
 				</div>
 			)}
-			<h2>Enforcer-only Panel</h2>
 			{/* Pending review (managers only) */}
-			{canManage && (
+			{canManage && (<>
+				<h2>Enforcer-only Panel</h2>
 				<div className={`${styles.reportSection} ${styles.noPrint}`}>
 					<PendingReportsTable />
 				</div>
-			)}
-
-			{/* Recently archived (managers only) */}
-			{canManage && (
 				<div className={`${styles.reportSection} ${styles.noPrint}`}>
 					<ArchivedReportsTable />
 				</div>
+				</>
 			)}
+
 			
-			<h2 className={`${styles.subHeading}`}>Admin-Only Panel</h2>
+			
 
 			{/* Admin User Management (admin only) */}
 			{canAdmin && (
+				<>
+				<h2 className={`${styles.subHeading}`}>Admin-Only Panel</h2>
 				<div className={`${styles.reportSection} ${styles.noPrint}`}>
 					<AdminUserManagement />
 				</div>
+				</>
 			)}
 		</div>
 	);

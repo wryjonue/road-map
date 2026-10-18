@@ -160,15 +160,23 @@ export async function updateUserRole(env, userId, newRole) {
 
 export async function unblockUser(env, userId) {
 	if (!userId) return;
+	console.log("here 1")
 	const clerk = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
 	const response = await clerk.users.unlockUser(userId);
-
+	
+	console.log("here 2")
 	if (response) {
+		
+	console.log("here 3")
 		await env.road_map_db.prepare(
 			'UPDATE users SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL'
 		).bind(userId).run();
+		
+	console.log("here 5")
 		return Response.json({ success: true });
 	} else {
+		
+	console.log("here 44")
 		console.error('Error blocking user:', err);
 		return Response.json({ success: false, error: err.message }, { status: 500 });
 	}

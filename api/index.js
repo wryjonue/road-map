@@ -191,7 +191,7 @@ export default {
 				
 				console.log("here 5")
 				const userId = decodeURIComponent(userUnblockMatch[1]);
-				return blockUser(env, userId);
+				return unblockUser(env, userId);
 			}
 
 			if (url.pathname === '/api/map/reports') {
