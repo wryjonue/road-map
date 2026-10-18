@@ -6,11 +6,11 @@ import logoImg from '../assets/logo.png';
 import roadmapIcon from '../assets/roadmap-icon.png';
 import styles from './About.module.css';
 
-const TEAM = [
-	{ name: 'Angelo Glenn C. Limin', role: 'Project Leader', avatar: liminAvatar },
-	{ name: 'James Timothy A. Manuel', role: 'Document Controller', avatar: manuelAvatar },
+const THE_DREAM_TEAM_LEZGO = [
+	{ name: 'Angelo Glenn C. Limin', role: 'Project Manager', avatar: liminAvatar },
+	{ name: 'James Timothy A. Manuel', role: 'System Analyst', avatar: manuelAvatar },
 	{ name: 'Nella Gabriel B. Mallari', role: 'UI/UX Designer', avatar: mallariAvatar },
-	{ name: 'Harley Jet P. Bagtas', role: 'Technical Assistant', avatar: bagtasAvatar },
+	{ name: 'Harley Jet P. Bagtas', role: 'Programmer', avatar: bagtasAvatar },
 ];
 
 const FEATURES = [
@@ -64,7 +64,7 @@ const FEATURES = [
 export default function About() {
 	return (
 		<div className={`${styles.aboutPage}`}>
-			{/* Hero */}
+		
 			<section className={styles.hero}>
 				<div className={styles.heroBranding}>
 					<img className={styles.heroLogo} src={logoImg} alt="RoadMap" />
@@ -93,12 +93,12 @@ export default function About() {
 				</div>
 			</section>
 
-			{/* Team */}
+			{/* THE_DREAM_TEAM_LEZGO */}
 			<section>
 				<h2 className={styles.sectionTitle}>Group Members</h2>
-				<div className={styles.teamGrid}>
-					{TEAM.map((member) => (
-						<div key={member.name} className={styles.teamCard}>
+				<div className={styles.THE_DREAM_TEAM_LEZGOGrid}>
+					{THE_DREAM_TEAM_LEZGO.map((member) => (
+						<div key={member.name} className={styles.THE_DREAM_TEAM_LEZGOCard}>
 							<img
 								className={styles.avatar}
 								src={member.avatar}
