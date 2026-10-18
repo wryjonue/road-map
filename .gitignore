@@ -33,3 +33,5 @@ dist-ssr
 # For Agent's Eyes
 render-ai-service/*
 plans/*
+AGENTS.md
+ROADMAP.md
