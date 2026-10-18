@@ -9,7 +9,7 @@ import { LocationResolutionError, resolveRoadLocation } from './location-service
 import { getNotifications, getUnreadCount, markAllAsRead, markAsRead, createManagementNotification } from './notification-service.js';
 import { handleClerkWebhook } from './clerk-webhook.js';
 import { handleAiModerationWebhook } from './webhook-service.js';
-import { updateUserRole, softDeleteUser, unblockUser } from './user-service.js';
+import { updateUserRole, softDeleteUser, unblockUser, blockUser } from './user-service.js';
 
 // Durable Object classes must be exported from the Worker entry so Wrangler can bind them.
 export { NotificationHub } from './durable-objects/notification-hub.js';
@@ -135,7 +135,7 @@ export default {
 			if (url.pathname === '/api/users') {
 					try {
 					const stmt = env.road_map_db.prepare(
-						'SELECT id, first_name, last_name, image_url, role, deleted_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC'
+						'SELECT id, first_name, last_name, image_url, role, deleted_at FROM users ORDER BY created_at DESC'
 					);
 					const result = await stmt.all();
 					return new Response(JSON.stringify(result.results), {
@@ -153,29 +153,46 @@ export default {
 			const userRoleMatch = url.pathname.match(/^\/api\/users\/([^/]+)\/role$/);
 			if (userRoleMatch) {
 				if (request.method !== 'PATCH') return Response.json({ error: 'Method not allowed' }, { status: 405 });
-	
 				const auth = await requireUser(request, env);
-	
 				if (auth instanceof Response) return auth;
-
 				if (auth.role !== 'admin') return Response.json({ error: 'Insufficient permissions' }, { status: 403 });
 	
 				let body;
 				try {
-					
-
 					body = await request.json();
-
 				} catch {
-	
 					return Response.json({ error: 'Request body must be valid JSON' }, { status: 400 });
 				}
-
 				const userId = decodeURIComponent(userRoleMatch[1]);
-		
 				return updateUserRole(env, userId, body.role); // Or whatever parameters your updateUserRole function expects
 			}
 
+			const userBlockMatch = url.pathname.match(/^\/api\/users\/([^/]+)\/block$/);
+			if (userBlockMatch) {
+				console.log("here 1")
+				if (request.method !== 'PATCH') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				console.log("here 2")
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				console.log("here 3")
+				if (auth.role !== 'admin') return Response.json({ error: 'Insufficient permissions' }, { status: 403 });
+				
+				console.log("here 5")
+				const userId = decodeURIComponent(userBlockMatch[1]);
+				return blockUser(env, userId);
+			}
+
+			const userUnblockMatch = url.pathname.match(/^\/api\/users\/([^/]+)\/unblock$/);
+			if (userUnblockMatch) {
+				if (request.method !== 'PATCH') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				if (auth.role !== 'admin') return Response.json({ error: 'Insufficient permissions' }, { status: 403 });
+				
+				console.log("here 5")
+				const userId = decodeURIComponent(userUnblockMatch[1]);
+				return blockUser(env, userId);
+			}
 
 			if (url.pathname === '/api/map/reports') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });

@@ -1,4 +1,4 @@
-import { clerkClient } from '@clerk/backend';
+import { createClerkClient } from '@clerk/backend';
 
 
 /**
@@ -105,112 +105,99 @@ export async function softDeleteUser(env, userId) {
  * @returns {Promise<void>}
  */
 export async function updateUserRole(env, userId, newRole) {
-    try {
-        // Call Clerk Backend API directly via fetch to update public_metadata.role
+	try {
+		// Call Clerk Backend API directly via fetch to update public_metadata.role
 		if (!userId || !newRole) return;
 		const validRoles = ['user', 'authority', 'admin'];
 		if (!validRoles.includes(newRole)) return;
 
-        const response = await fetch(`https://api.clerk.com/v1/users/${userId}/metadata`, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${env.CLERK_SECRET_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                public_metadata: {
-                    role: newRole // e.g., 'admin', 'member', etc.
-                }
-            })
-        });
-		
-	
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Clerk API error:', errorText);
-            return Response.json({ success: false, error: 'Failed to update role in Clerk' }, { status: response.status });
-        }
-	
-        const updatedUser = await response.json();
+		const response = await fetch(`https://api.clerk.com/v1/users/${userId}/metadata`, {
+			method: 'PATCH',
+			headers: {
+				'Authorization': `Bearer ${env.CLERK_SECRET_KEY}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				public_metadata: {
+					role: newRole // e.g., 'admin', 'member', etc.
+				}
+			})
+		});
+
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			console.error('Clerk API error:', errorText);
+			return Response.json({ success: false, error: 'Failed to update role in Clerk' }, { status: response.status });
+		}
+
+		const updatedUser = await response.json();
 		await env.road_map_db.prepare(
 			'UPDATE users SET role = ? WHERE id = ? AND deleted_at IS NULL'
 		).bind(newRole, userId).run();
-	
-/*
-		// Create notification for role change
-		const userName = await getUserById(env, userId);
-		const roleName = newRole === 'user' ? 'Member' : newRole === 'authority' ? 'Enforcer' : 'Admin';
 
-		await createManagementNotification(
-			env,
-			userId,
-			'user_role_changed',
-			actorId,
-			userId,
-			`Your role has been changed to ${roleName} by ${actorName?.first_name || 'an admin'}`
-		);*/
-        
-        return Response.json({ success: true, user: updatedUser });
-    } catch (err) {
-        console.error('Error updating user role:', err);
-        return Response.json({ success: false, error: err.message }, { status: 500 });
-    }
+		/*
+				// Create notification for role change
+				const userName = await getUserById(env, userId);
+				const roleName = newRole === 'user' ? 'Member' : newRole === 'authority' ? 'Enforcer' : 'Admin';
+		
+				await createManagementNotification(
+					env,
+					userId,
+					'user_role_changed',
+					actorId,
+					userId,
+					`Your role has been changed to ${roleName} by ${actorName?.first_name || 'an admin'}`
+				);*/
+
+		return Response.json({ success: true, user: updatedUser });
+	} catch (err) {
+		console.error('Error updating user role:', err);
+		return Response.json({ success: false, error: err.message }, { status: 500 });
+	}
 }
 
-/**
- * Unblock a user (restore from soft-delete)
- * @param {Object} env - Worker environment
- * @param {string} userId - Clerk user ID
- * @param {string} actorId - ID of user performing the action
- * @returns {Promise<void>}
- */
-export async function unblockUser(env, userId, actorId) {
-	if (!userId || !actorId) return;
-	await env.road_map_db.prepare(
-		'UPDATE users SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL'
-	).bind(userId).run();
 
-	// Create notification for unblocking
-	const userName = await getUserById(env, userId);
-	const actorName = await getUserById(env, actorId);
-/*
-	await createManagementNotification(
-		env,
-		userId,
-		'user_unblocked',
-		actorId,
-		userId,
-		`Your account has been restored by ${actorName?.first_name || 'an admin'}`
-	);*/
+export async function unblockUser(env, userId) {
+	if (!userId) return;
+	const clerk = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
+	const response = await clerk.users.unlockUser(userId);
+
+	if (response) {
+		await env.road_map_db.prepare(
+			'UPDATE users SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL'
+		).bind(userId).run();
+		return Response.json({ success: true });
+	} else {
+		console.error('Error blocking user:', err);
+		return Response.json({ success: false, error: err.message }, { status: 500 });
+	}
+
+
 }
 
-/**
- * Block a user (soft-delete)
- * @param {Object} env - Worker environment
- * @param {string} userId - Clerk user ID
- * @param {string} actorId - ID of user performing the action
- * @returns {Promise<void>}
- */
-export async function blockUser(env, userId, actorId) {
-	if (!userId || !actorId) return;
 
-	const response = await clerkClient.users.banUser(userId);
-	
+export async function blockUser(env, userId) {
+	if (!userId) return;
+	const clerk = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
+	const response = await clerk.users.lockUser(userId);
+
 	if (response) {
 		await env.road_map_db.prepare(
 			'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
 		).bind(userId).run();
-		return Response.json({ success: true, user: updatedUser });
+		return Response.json({ success: true });
 	} else {
 		console.error('Error blocking user:', err);
-        return Response.json({ success: false, error: err.message }, { status: 500 });
+		return Response.json({ success: false, error: err.message }, { status: 500 });
 	}
-	
+
 
 	// Create notification for blocking
+	/*
 	const userName = await getUserById(env, userId);
 	const actorName = await getUserById(env, actorId);
-	/*
+	
 	await createManagementNotification(
 		env,
 		userId,
@@ -220,7 +207,7 @@ export async function blockUser(env, userId, actorId) {
 		`Your account has been blocked by ${actorName?.first_name || 'an admin'}`
 	);*/
 
-	
+
 
 }
 
