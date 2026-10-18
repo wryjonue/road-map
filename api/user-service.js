@@ -1,3 +1,6 @@
+import { clerkClient } from '@clerk/backend';
+
+
 /**
  * Build a display name from first_name and last_name columns.
  * Used by API services after LEFT JOIN users resolves author profiles.
@@ -101,29 +104,57 @@ export async function softDeleteUser(env, userId) {
  * @param {string} actorId - ID of user performing the action
  * @returns {Promise<void>}
  */
-export async function updateUserRole(env, userId, newRole, actorId) {
-	if (!userId || !newRole || !actorId) return;
-	// Validate role
-	const validRoles = ['user', 'authority', 'admin'];
-	if (!validRoles.includes(newRole)) return;
+export async function updateUserRole(env, userId, newRole) {
+    try {
+        // Call Clerk Backend API directly via fetch to update public_metadata.role
+		if (!userId || !newRole) return;
+		const validRoles = ['user', 'authority', 'admin'];
+		if (!validRoles.includes(newRole)) return;
 
-	await env.road_map_db.prepare(
-		'UPDATE users SET role = ? WHERE id = ? AND deleted_at IS NULL'
-	).bind(newRole, userId).run();
+        const response = await fetch(`https://api.clerk.com/v1/users/${userId}/metadata`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${env.CLERK_SECRET_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                public_metadata: {
+                    role: newRole // e.g., 'admin', 'member', etc.
+                }
+            })
+        });
+		
+	
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Clerk API error:', errorText);
+            return Response.json({ success: false, error: 'Failed to update role in Clerk' }, { status: response.status });
+        }
+	
+        const updatedUser = await response.json();
+		await env.road_map_db.prepare(
+			'UPDATE users SET role = ? WHERE id = ? AND deleted_at IS NULL'
+		).bind(newRole, userId).run();
+	
+/*
+		// Create notification for role change
+		const userName = await getUserById(env, userId);
+		const roleName = newRole === 'user' ? 'Member' : newRole === 'authority' ? 'Enforcer' : 'Admin';
 
-	// Create notification for role change
-	const userName = await getUserById(env, userId);
-	const actorName = await getUserById(env, actorId);
-	const roleName = newRole === 'user' ? 'Member' : newRole === 'authority' ? 'Enforcer' : 'Admin';
-
-	await createManagementNotification(
-		env,
-		userId,
-		'user_role_changed',
-		actorId,
-		userId,
-		`Your role has been changed to ${roleName} by ${actorName?.first_name || 'an admin'}`
-	);
+		await createManagementNotification(
+			env,
+			userId,
+			'user_role_changed',
+			actorId,
+			userId,
+			`Your role has been changed to ${roleName} by ${actorName?.first_name || 'an admin'}`
+		);*/
+        
+        return Response.json({ success: true, user: updatedUser });
+    } catch (err) {
+        console.error('Error updating user role:', err);
+        return Response.json({ success: false, error: err.message }, { status: 500 });
+    }
 }
 
 /**
@@ -142,7 +173,7 @@ export async function unblockUser(env, userId, actorId) {
 	// Create notification for unblocking
 	const userName = await getUserById(env, userId);
 	const actorName = await getUserById(env, actorId);
-
+/*
 	await createManagementNotification(
 		env,
 		userId,
@@ -150,7 +181,7 @@ export async function unblockUser(env, userId, actorId) {
 		actorId,
 		userId,
 		`Your account has been restored by ${actorName?.first_name || 'an admin'}`
-	);
+	);*/
 }
 
 /**
@@ -162,14 +193,24 @@ export async function unblockUser(env, userId, actorId) {
  */
 export async function blockUser(env, userId, actorId) {
 	if (!userId || !actorId) return;
-	await env.road_map_db.prepare(
-		'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
-	).bind(userId).run();
+
+	const response = await clerkClient.users.banUser(userId);
+	
+	if (response) {
+		await env.road_map_db.prepare(
+			'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
+		).bind(userId).run();
+		return Response.json({ success: true, user: updatedUser });
+	} else {
+		console.error('Error blocking user:', err);
+        return Response.json({ success: false, error: err.message }, { status: 500 });
+	}
+	
 
 	// Create notification for blocking
 	const userName = await getUserById(env, userId);
 	const actorName = await getUserById(env, actorId);
-
+	/*
 	await createManagementNotification(
 		env,
 		userId,
@@ -177,7 +218,10 @@ export async function blockUser(env, userId, actorId) {
 		actorId,
 		userId,
 		`Your account has been blocked by ${actorName?.first_name || 'an admin'}`
-	);
+	);*/
+
+	
+
 }
 
 /**

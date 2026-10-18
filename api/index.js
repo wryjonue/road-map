@@ -133,7 +133,7 @@ export default {
 			}
 			// User API
 			if (url.pathname === '/api/users') {
-				try {
+					try {
 					const stmt = env.road_map_db.prepare(
 						'SELECT id, first_name, last_name, image_url, role, deleted_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC'
 					);
@@ -148,7 +148,35 @@ export default {
 						headers: { 'Content-Type': 'application/json' }
 					});
 				}
+
 			}
+			const userRoleMatch = url.pathname.match(/^\/api\/users\/([^/]+)\/role$/);
+			if (userRoleMatch) {
+				if (request.method !== 'PATCH') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+	
+				const auth = await requireUser(request, env);
+	
+				if (auth instanceof Response) return auth;
+
+				if (auth.role !== 'admin') return Response.json({ error: 'Insufficient permissions' }, { status: 403 });
+	
+				let body;
+				try {
+					
+
+					body = await request.json();
+
+				} catch {
+	
+					return Response.json({ error: 'Request body must be valid JSON' }, { status: 400 });
+				}
+
+				const userId = decodeURIComponent(userRoleMatch[1]);
+		
+				return updateUserRole(env, userId, body.role); // Or whatever parameters your updateUserRole function expects
+			}
+
+
 			if (url.pathname === '/api/map/reports') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
 				const auth = await getOptionalUser(request, env);
