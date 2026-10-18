@@ -6,9 +6,10 @@ import { getOptionalUser, requireUser } from './auth.js';
 import { chatWithGemini, MAX_MESSAGE_LENGTH } from './ai-service.js';
 import { getRecentHistory, saveMessage, clearHistory } from './chat-service.js';
 import { LocationResolutionError, resolveRoadLocation } from './location-service.js';
-import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from './notification-service.js';
+import { getNotifications, getUnreadCount, markAllAsRead, markAsRead, createManagementNotification } from './notification-service.js';
 import { handleClerkWebhook } from './clerk-webhook.js';
 import { handleAiModerationWebhook } from './webhook-service.js';
+import { updateUserRole, softDeleteUser, unblockUser } from './user-service.js';
 
 // Durable Object classes must be exported from the Worker entry so Wrangler can bind them.
 export { NotificationHub } from './durable-objects/notification-hub.js';
@@ -130,6 +131,24 @@ export default {
 				const limit = Number(url.searchParams.get('limit') ?? 10);
 				return getArchivedReports(env, auth, limit);
 			}
+			// User API
+			if (url.pathname === '/api/users') {
+				try {
+					const stmt = env.road_map_db.prepare(
+						'SELECT id, first_name, last_name, image_url, role, deleted_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC'
+					);
+					const result = await stmt.all();
+					return new Response(JSON.stringify(result.results), {
+						headers: { 'Content-Type': 'application/json' }
+					});
+				} catch (err) {
+					console.error('Failed to fetch users:', err);
+					return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+						status: 500,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+			}
 			if (url.pathname === '/api/map/reports') {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
 				const auth = await getOptionalUser(request, env);
@@ -186,40 +205,40 @@ export default {
 				if (auth instanceof Response) return auth;
 				return deletePendingReport(env, Number(deleteMatch[1]), auth);
 			}
-const voteMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
-		if (voteMatch && request.method === 'POST') {
-			const auth = await requireUser(request, env);
-			if (auth instanceof Response) return auth;
-			return voteReport(env, Number(voteMatch[1]), auth.userId);
-		}
-		const voteStatusMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
-		if (voteStatusMatch && request.method === 'GET') {
-			const auth = await getOptionalUser(request, env);
-			if (auth instanceof Response) return auth;
-			return getVoteStatus(env, Number(voteStatusMatch[1]), auth?.userId ?? null);
-		}
-		const commentsMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/comments$/);
-		if (commentsMatch) {
-			const reportId = Number(commentsMatch[1]);
-			if (request.method === 'GET') {
-				const auth = await getOptionalUser(request, env);
-				if (auth instanceof Response) return auth;
-				return getComments(env, reportId, auth);
-			}
-			if (request.method === 'POST') {
+			const voteMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
+			if (voteMatch && request.method === 'POST') {
 				const auth = await requireUser(request, env);
 				if (auth instanceof Response) return auth;
-				return createComment(request, env, reportId, auth);
+				return voteReport(env, Number(voteMatch[1]), auth.userId);
 			}
-			return Response.json({ error: 'Method not allowed' }, { status: 405 });
-		}
-		const commentMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/comments\/(\d+)$/);
-		if (commentMatch) {
-			if (request.method !== 'DELETE') return Response.json({ error: 'Method not allowed' }, { status: 405 });
-			const auth = await requireUser(request, env);
-			if (auth instanceof Response) return auth;
-			return deleteComment(env, Number(commentMatch[1]), Number(commentMatch[2]), auth);
-		}
+			const voteStatusMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
+			if (voteStatusMatch && request.method === 'GET') {
+				const auth = await getOptionalUser(request, env);
+				if (auth instanceof Response) return auth;
+				return getVoteStatus(env, Number(voteStatusMatch[1]), auth?.userId ?? null);
+			}
+			const commentsMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/comments$/);
+			if (commentsMatch) {
+				const reportId = Number(commentsMatch[1]);
+				if (request.method === 'GET') {
+					const auth = await getOptionalUser(request, env);
+					if (auth instanceof Response) return auth;
+					return getComments(env, reportId, auth);
+				}
+				if (request.method === 'POST') {
+					const auth = await requireUser(request, env);
+					if (auth instanceof Response) return auth;
+					return createComment(request, env, reportId, auth);
+				}
+				return Response.json({ error: 'Method not allowed' }, { status: 405 });
+			}
+			const commentMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/comments\/(\d+)$/);
+			if (commentMatch) {
+				if (request.method !== 'DELETE') return Response.json({ error: 'Method not allowed' }, { status: 405 });
+				const auth = await requireUser(request, env);
+				if (auth instanceof Response) return auth;
+				return deleteComment(env, Number(commentMatch[1]), Number(commentMatch[2]), auth);
+			}
 			const mediaMatch = url.pathname.match(/^\/api\/media\/(.+)$/);
 			if (mediaMatch) {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });
@@ -233,7 +252,7 @@ const voteMatch = url.pathname.match(/^\/api\/reports\/(\d+)\/vote$/);
 				if (auth instanceof Response) return auth;
 				return getReportFacets(env);
 			}
-			const reportMatch = url.pathname.match(/^\/api\/reports\/?(\d+)?$/);
+			const reportMatch = url.pathname.match(/^\/api\/reports\/?((\d+))?$/);
 			if (!reportMatch) return Response.json({ error: 'Route not found' }, { status: 404 });
 			if (reportMatch[1]) {
 				if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 });

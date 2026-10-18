@@ -1,7 +1,3 @@
-// Canonical user profile management synced from Clerk.
-// All writes are idempotent. Soft-deleted users (deleted_at IS NOT NULL) are never
-// resurrected by upserts — only an explicit admin action could restore them.
-
 /**
  * Build a display name from first_name and last_name columns.
  * Used by API services after LEFT JOIN users resolves author profiles.
@@ -30,19 +26,7 @@ function extractNames(source) {
 			firstName = parts[0];
 		}
 	}
-
-	return {
-		firstName: firstName || null,
-		lastName: lastName || null,
-		imageUrl: (typeof source.picture === 'string' ? source.picture : source.image_url)?.trim() || null,
-	};
-}
-
-export async function getUserById(env, userId) {
-	if (!userId) return null;
-	return env.road_map_db.prepare(
-		'SELECT id, first_name, last_name, image_url, role, created_at, updated_at, deleted_at FROM users WHERE id = ? LIMIT 1'
-	).bind(userId).first();
+	return { firstName, lastName };
 }
 
 /**
@@ -53,37 +37,23 @@ export async function getUserById(env, userId) {
 export async function upsertUserFromClaims(env, claims) {
 	if (!claims?.sub) return;
 	const id = claims.sub;
-	const { firstName, lastName, imageUrl } = extractNames(claims);
+	const { firstName, lastName } = extractNames(claims);
 
 	// Diagnostic: log what the JWT actually contains for name fields.
-	console.info('[user-upsert] claims keys:', Object.keys(claims).filter((k) => /name|picture|image/i.test(k)), 'extracted:', { firstName, lastName, imageUrl });
-
-	// If JWT claims carry no profile data, only create the row if it doesn't exist yet.
-	// Never overwrite existing non-null values with nulls from empty claims.
-	if (!firstName && !lastName && !imageUrl) {
-		const existing = await getUserById(env, id);
-		if (existing) return;
-		await env.road_map_db.prepare(
-			'INSERT INTO users (id, role) VALUES (?, ?)'
-		).bind(id, 'user').run();
-		return;
-	}
+	console.info('[user-upsert] claims keys:', Object.keys(claims).filter((k) => /name|picture|image/i.test(k)), 'extracted:', { firstName, lastName });
 
 	const existing = await getUserById(env, id);
 	if (existing) {
+		// Never resurrect a soft-deleted user via webhook.
 		if (existing.deleted_at != null) return;
-		// Only update fields that are non-null in claims; preserve existing values otherwise.
-		const fn = firstName ?? existing.first_name;
-		const ln = lastName ?? existing.last_name;
-		const img = imageUrl ?? existing.image_url;
-		if (fn === existing.first_name && ln === existing.last_name && img === existing.image_url) return;
+		if (existing.first_name === firstName && existing.last_name === lastName) return;
 		await env.road_map_db.prepare(
-			'UPDATE users SET first_name = ?, last_name = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
-		).bind(fn, ln, img, id).run();
+			'UPDATE users SET first_name = ?, last_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
+		).bind(firstName, lastName, id).run();
 	} else {
 		await env.road_map_db.prepare(
-			'INSERT INTO users (id, first_name, last_name, image_url, role) VALUES (?, ?, ?, ?, ?)'
-		).bind(id, firstName, lastName, imageUrl, 'user').run();
+			'INSERT INTO users (id, first_name, last_name, role) VALUES (?, ?, ?, ?)'
+		).bind(id, firstName, lastName, 'user').run();
 	}
 }
 
@@ -94,20 +64,20 @@ export async function upsertUserFromClaims(env, claims) {
 export async function upsertUserFromPayload(env, userData) {
 	if (!userData?.id) return;
 	const id = userData.id;
-	const { firstName, lastName, imageUrl } = extractNames(userData);
+	const { firstName, lastName } = extractNames(userData);
 
 	const existing = await getUserById(env, id);
 	if (existing) {
 		// Never resurrect a soft-deleted user via webhook.
 		if (existing.deleted_at != null) return;
-		if (existing.first_name === firstName && existing.last_name === lastName && existing.image_url === imageUrl) return;
+		if (existing.first_name === firstName && existing.last_name === lastName) return;
 		await env.road_map_db.prepare(
-			'UPDATE users SET first_name = ?, last_name = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
-		).bind(firstName, lastName, imageUrl, id).run();
+			'UPDATE users SET first_name = ?, last_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
+		).bind(firstName, lastName, id).run();
 	} else {
 		await env.road_map_db.prepare(
-			'INSERT INTO users (id, first_name, last_name, image_url, role) VALUES (?, ?, ?, ?, ?)'
-		).bind(id, firstName, lastName, imageUrl, 'user').run();
+			'INSERT INTO users (id, first_name, last_name, role) VALUES (?, ?, ?, ?)'
+		).bind(id, firstName, lastName, 'user').run();
 	}
 }
 
@@ -120,4 +90,104 @@ export async function softDeleteUser(env, userId) {
 	await env.road_map_db.prepare(
 		'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
 	).bind(userId).run();
+}
+
+/**
+ * Update user role in D1 database
+ * @param {Object} env - Worker environment
+ * @param {string} userId - Clerk user ID
+ * @param {string} newRole - New role value ('user', 'authority', 'admin')
+ * @param {string} actorId - ID of user performing the action
+ * @returns {Promise<void>}
+ */
+export async function updateUserRole(env, userId, newRole, actorId) {
+	if (!userId || !newRole || !actorId) return;
+	// Validate role
+	const validRoles = ['user', 'authority', 'admin'];
+	if (!validRoles.includes(newRole)) return;
+
+	await env.road_map_db.prepare(
+		'UPDATE users SET role = ? WHERE id = ? AND deleted_at IS NULL'
+	).bind(newRole, userId).run();
+
+	// Create notification for role change
+	const userName = await getUserById(env, userId);
+	const actorName = await getUserById(env, actorId);
+	const roleName = newRole === 'user' ? 'Member' : newRole === 'authority' ? 'Enforcer' : 'Admin';
+
+	await createManagementNotification(
+		env,
+		userId,
+		'user_role_changed',
+		actorId,
+		userId,
+		`Your role has been changed to ${roleName} by ${actorName?.first_name || 'an admin'}`
+	);
+}
+
+/**
+ * Unblock a user (restore from soft-delete)
+ * @param {Object} env - Worker environment
+ * @param {string} userId - Clerk user ID
+ * @param {string} actorId - ID of user performing the action
+ * @returns {Promise<void>}
+ */
+export async function unblockUser(env, userId, actorId) {
+	if (!userId || !actorId) return;
+	await env.road_map_db.prepare(
+		'UPDATE users SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL'
+	).bind(userId).run();
+
+	// Create notification for unblocking
+	const userName = await getUserById(env, userId);
+	const actorName = await getUserById(env, actorId);
+
+	await createManagementNotification(
+		env,
+		userId,
+		'user_unblocked',
+		actorId,
+		userId,
+		`Your account has been restored by ${actorName?.first_name || 'an admin'}`
+	);
+}
+
+/**
+ * Block a user (soft-delete)
+ * @param {Object} env - Worker environment
+ * @param {string} userId - Clerk user ID
+ * @param {string} actorId - ID of user performing the action
+ * @returns {Promise<void>}
+ */
+export async function blockUser(env, userId, actorId) {
+	if (!userId || !actorId) return;
+	await env.road_map_db.prepare(
+		'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL'
+	).bind(userId).run();
+
+	// Create notification for blocking
+	const userName = await getUserById(env, userId);
+	const actorName = await getUserById(env, actorId);
+
+	await createManagementNotification(
+		env,
+		userId,
+		'user_blocked',
+		actorId,
+		userId,
+		`Your account has been blocked by ${actorName?.first_name || 'an admin'}`
+	);
+}
+
+/**
+ * Get user by ID
+ * @param {Object} env - Worker environment
+ * @param {string} userId - Clerk user ID
+ * @returns {Promise<Object|null>}
+ */
+export async function getUserById(env, userId) {
+	if (!userId) return null;
+	return env.road_map_db.prepare(
+		'SELECT id, first_name, last_name, image_url, role, created_at, updated_at, deleted_at FROM users WHERE id = ? LIMIT 1'
+	).bind(userId).first();
 }

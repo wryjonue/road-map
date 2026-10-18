@@ -1,0 +1,332 @@
+.container {
+  margin-top: 24px;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.title {
+  margin: 0 0 4px 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.error {
+  margin: 0 0 16px 0;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.loading {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.emptyState {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.userList {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+
+.table th {
+  text-align: left;
+  padding: 12px 16px;
+  background: var(--surface);
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.table tr:hover {
+  background: var(--bg-app);
+}
+
+.tableRow {
+  transition: background-color 0.2s;
+}
+
+.userCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.userAvatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-sidebar);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.userAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatarPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.userName {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.userEmail {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.roleCell {
+  width: 120px;
+}
+
+.roleBadge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.roleBadge[data-role='user'] {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.roleBadge[data-role='authority'] {
+  background: rgba(34, 211, 238, 0.1);
+  color: #0ea5e9;
+}
+
+.roleBadge[data-role='admin'] {
+  background: rgba(139, 92, 254, 0.1);
+  color: #8b5cf6;
+}
+
+.statusCell {
+  width: 100px;
+}
+
+.statusBadge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.statusBadge.active {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.statusBadge.blocked {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.actionsCell {
+  width: 200px;
+  display: flex;
+  gap: 8px;
+}
+
+.actionButton {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.actionButton:hover {
+  background: var(--bg-app);
+  border-color: var(--border);
+}
+
+.actionButton:active {
+  transform: translateY(1px);
+}
+
+.blockButton {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.blockButton:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.unblockButton {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.unblockButton:hover {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 500px;
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.modalBody {
+  padding: 20px;
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-light);
+}
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.select {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.warning {
+  margin-top: 12px;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.closeButton:hover {
+  color: var(--text);
+}
+
+.cancelButton {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.confirmButton {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--primary);
+  color: white;
+  cursor: pointer;
+}
+
+.dangerButton {
+  background: var(--danger);
+}
+
+@media (max-width: 768px) {
+  .table {
+    min-width: 100%;
+  }
+  
+  .actionsCell {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .modal {
+    width: 95%;
+  }
+}

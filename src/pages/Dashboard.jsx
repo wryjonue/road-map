@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/react';
 import { ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Filler, Legend, LineController, LineElement, LinearScale, PointElement, Tooltip } from 'chart.js';
 import PendingReportsTable from '../components/PendingReportsTable';
@@ -6,6 +6,7 @@ import ArchivedReportsTable from '../components/ArchivedReportsTable';
 import { useAppRole, canManageReports } from '../auth/roles';
 import { buildDashboardCsv, downloadCsv, exportFilename } from '../utils/exportCsv';
 import { generateDashboardPdf } from '../utils/exportPdf';
+import AdminUserManagement from '../components/AdminUserManagement';
 import styles from './Dashboard.module.css';
 
 Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, Filler, Legend, LineController, LineElement, LinearScale, PointElement, Tooltip);
@@ -40,6 +41,7 @@ export default function Dashboard() {
 	const { getToken, isLoaded, isSignedIn } = useAuth();
 	const { isLoaded: roleLoaded, role } = useAppRole();
 	const canManage = roleLoaded && canManageReports(role);
+	const canAdmin = roleLoaded && role === 'admin';
 
 	const [selectedMonth, setSelectedMonth] = useState(() => {
 		const now = new Date();
@@ -463,6 +465,13 @@ export default function Dashboard() {
 			{canManage && (
 				<div className={`${styles.reportSection} ${styles.noPrint}`}>
 					<PendingReportsTable />
+				</div>
+			)}
+
+			{/* Admin User Management (admin only) */}
+			{canAdmin && (
+				<div className={`${styles.reportSection} ${styles.noPrint}`}>
+					<AdminUserManagement />
 				</div>
 			)}
 
