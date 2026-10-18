@@ -124,7 +124,6 @@ export default function AdminUserManagement({ onActionComplete }) {
     <div className={styles.container}>
       <div className={styles.header}>
         <h2 className={styles.title}>User Management</h2>
-        <p className={styles.subtitle}>Manage user roles and account status</p>
       </div>
 
       {error && <p className={styles.error}>{error}</p>}

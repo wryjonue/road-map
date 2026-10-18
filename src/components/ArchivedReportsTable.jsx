@@ -65,11 +65,11 @@ export default function ArchivedReportsTable() {
 	return (
 		<section className={styles.card} aria-labelledby="archived-heading">
 			<div className={styles.header}>
-				<h2 id="archived-heading" className={styles.title}>Recently archived</h2>
+				<h2 id="archived-heading" className={styles.title}>Archives</h2>
 				{!isLoading && <span className={styles.countBadge}>{reports.length} archived</span>}
 			</div>
 
-			<p className={styles.subtitle}>Rejected and deleted reports are kept here for the record — they are hidden from everyone else.</p>
+			
 
 			{error && <p className={styles.error} role="alert">{error}</p>}
 
