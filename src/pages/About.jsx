@@ -96,9 +96,9 @@ export default function About() {
 			{/* THE_DREAM_TEAM_LEZGO */}
 			<section>
 				<h2 className={styles.sectionTitle}>Group Members</h2>
-				<div className={styles.THE_DREAM_TEAM_LEZGOGrid}>
+				<div className={styles.teamGrid}>
 					{THE_DREAM_TEAM_LEZGO.map((member) => (
-						<div key={member.name} className={styles.THE_DREAM_TEAM_LEZGOCard}>
+						<div key={member.name} className={styles.teamCard}>
 							<img
 								className={styles.avatar}
 								src={member.avatar}

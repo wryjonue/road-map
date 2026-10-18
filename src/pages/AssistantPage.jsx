@@ -252,8 +252,8 @@ export default function AssistantPage() {
 			<div className={styles.page}>
 				<div className={styles.card}>
 					<div className={styles.empty}>
-						<h2 className={styles.emptyTitle}>Sign in to use the AI assistant</h2>
-						<p className={styles.emptyText}>The RoadMap AI can search reports, summarize incident stats, and find nearby issues — once you’re signed in.</p>
+						<h2 className={styles.emptyTitle}>Sign in to use the Bot</h2>
+						<p className={styles.emptyText}>Expensive ang API Key boi.</p>
 						<Link to="/sign-in" className="primary-btn">Sign in</Link>
 					</div>
 				</div>
