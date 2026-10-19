@@ -219,12 +219,13 @@ export async function getHotspots(env, url) {
 	}
 
 	const query = `
-		SELECT r.id, r.latitude, r.longitude, r.status, r.category_id
+		SELECT r.id, r.latitude, r.longitude, r.status, r.category_id, r.route_polyline
 		FROM reports r
 		WHERE r.deleted_at IS NULL
 			AND r.status IN ('Open', 'Resolved')
 			AND r.latitude IS NOT NULL
 			AND r.longitude IS NOT NULL
+			AND r.route_polyline IS NOT NULL
 			AND r.created_at >= ?${bboxClause}
 		ORDER BY r.created_at DESC
 		LIMIT ?`;

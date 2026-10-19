@@ -10,6 +10,7 @@ import styles from './MapView.module.css';
 
 const SOURCE_ID = 'road-reports';
 const HOTSPOT_SOURCE_ID = 'hotspots';
+const HOTSPOT_LABEL_SOURCE_ID = 'hotspot-labels';
 const CATEGORY_COLORS = {
 	1: '#c65d2e',
 	2: '#bd3e50',
@@ -84,7 +85,7 @@ export default function MapView() {
 	const [autoCenter, setAutoCenter] = useState(true);
 	const [hasInitialFix, setHasInitialFix] = useState(false);
 	const [proximityThreshold, setProximityThreshold] = useState(300);
-	const [showHotspots, setShowHotspots] = useState(true);
+	const [showHotspots, setShowHotspots] = useState(false);
 	const [hotspots, setHotspots] = useState({ type: 'FeatureCollection', features: [] });
 	const selectedReport = reports.find((report) => report.id === selectedReportId) || null;
 
@@ -252,57 +253,48 @@ export default function MapView() {
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: [] },
 			});
+			map.addSource(HOTSPOT_LABEL_SOURCE_ID, {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: [] },
+			});
 			map.addLayer({
-				id: 'hotspot-circles',
-				type: 'circle',
+				id: 'hotspot-lines',
+				type: 'line',
 				source: HOTSPOT_SOURCE_ID,
 				paint: {
-					'circle-color': '#e74c3c',
-					'circle-opacity': 0.35,
-					// Radius scales exponentially with zoom to cover ~300m on the ground.
-					// Base 2 interpolation matches the Web Mercator 2^zoom scaling.
-					// Stops calculated as: (300m * 2^zoom) / (156543 * cos(14.5deg))
-					'circle-radius': [
+					'line-color': [
 						'interpolate',
-						['exponential', 2],
-						['zoom'],
-						10, 4,
-						12, 8,
-						14, 32,
-						16, 130,
-						18, 520,
+						['linear'],
+						['get', 'count'],
+						1, '#e66836',
+						3, '#d43c22',
+						5, '#941203',
+						10, '#3b1010',
 					],
-					'circle-stroke-color': '#e74c3c',
-					'circle-stroke-width': 1.5,
-					'circle-stroke-opacity': 0.6,
+					'line-opacity': 0.8,
+					'line-width': [
+						'interpolate',
+						['linear'],
+						['get', 'count'],
+						1, 6,
+						3, 8,
+						5, 10,
+						10, 12,
+					],
 				},
 			});
-			map.addLayer({
-				id: 'hotspot-labels',
-				type: 'symbol',
-				source: HOTSPOT_SOURCE_ID,
-				layout: {
-					'text-field': ['concat', ['get', 'count'], ' incidents'],
-					'text-size': 11,
-					'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-					'text-offset': [0, 1.8],
-					'text-anchor': 'top',
-				},
-				paint: {
-					'text-color': '#c0392b',
-					'text-halo-color': '#ffffff',
-					'text-halo-width': 1.5,
-				},
-			});
+			
 
-			map.on('click', 'hotspot-circles', (event) => {
+			map.on('click', 'hotspot-lines', (event) => {
 				const feature = event.features?.[0];
 				if (!feature) return;
-				const coords = feature.geometry.coordinates;
-				map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 14), duration: 600 });
+				const midpoint = feature.properties?.midpointCoordinates;
+				if (midpoint) {
+					map.easeTo({ center: midpoint, zoom: Math.max(map.getZoom(), 14), duration: 600 });
+				}
 			});
-			map.on('mouseenter', 'hotspot-circles', () => { map.getCanvas().style.cursor = 'pointer'; });
-			map.on('mouseleave', 'hotspot-circles', () => { map.getCanvas().style.cursor = ''; });
+			map.on('mouseenter', 'hotspot-lines', () => { map.getCanvas().style.cursor = 'pointer'; });
+			map.on('mouseleave', 'hotspot-lines', () => { map.getCanvas().style.cursor = ''; });
 
 			map.addSource('user-location', {
 				type: 'geojson',
@@ -439,10 +431,33 @@ export default function MapView() {
 
 	useEffect(() => {
 		if (!isMapLoaded) return;
-		const source = mapRef.current?.getSource(HOTSPOT_SOURCE_ID);
-		if (!source) return;
-		source.setData(showHotspots ? hotspots : { type: 'FeatureCollection', features: [] });
+		const lineSource = mapRef.current?.getSource(HOTSPOT_SOURCE_ID);
+		const labelSource = mapRef.current?.getSource(HOTSPOT_LABEL_SOURCE_ID);
+		if (!lineSource) return;
+		const data = showHotspots ? hotspots : { type: 'FeatureCollection', features: [] };
+		lineSource.setData(data);
+		if (labelSource) {
+			const labelFeatures = data.features
+				.filter((f) => f.properties?.midpointCoordinates)
+				.map((f) => ({
+					type: 'Feature',
+					properties: { count: f.properties.count, reportIds: f.properties.reportIds },
+					geometry: { type: 'Point', coordinates: f.properties.midpointCoordinates },
+				}));
+			labelSource.setData({ type: 'FeatureCollection', features: labelFeatures });
+		}
 	}, [isMapLoaded, hotspots, showHotspots]);
+
+	useEffect(() => {
+		if (!isMapLoaded) return;
+		const map = mapRef.current;
+		const visibility = showHotspots ? 'none' : 'visible';
+		for (const layerId of ['route-paths', 'report-clusters', 'report-points', 'report-selection']) {
+			if (map.getLayer(layerId)) {
+				map.setLayoutProperty(layerId, 'visibility', visibility);
+			}
+		}
+	}, [isMapLoaded, showHotspots]);
 
 	const legendItems = colorMode === 'status'
 		? Object.entries(STATUS_COLORS).map(([name, color]) => ({ name, color }))
