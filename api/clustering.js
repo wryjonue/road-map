@@ -29,13 +29,7 @@ export function segmentDistance(segA, segB) {
 	return Math.min(d1, d2, d3, d4);
 }
 
-/**
- * DBSCAN over line segments using segment-to-segment distance.
- * @param {Array<[[number,number],[number,number]]>} segments
- * @param {number} eps - max distance in meters
- * @param {number} minPts - minimum segments to form a core
- * @returns {Int32Array} cluster labels (-1 = noise, >0 = cluster id)
- */
+
 export function segmentDbscan(segments, eps, minPts) {
 	const n = segments.length;
 	const labels = new Int32Array(n);
@@ -55,23 +49,30 @@ export function segmentDbscan(segments, eps, minPts) {
 	function expandCluster(startIdx, neighbors, id) {
 		labels[startIdx] = id;
 		const queue = [...neighbors];
+
+		// Pre-label the initial batch of neighbors to prevent duplicate processing
+		for (const neighbor of queue) {
+			if (labels[neighbor] === 0 || labels[neighbor] === -1) {
+				labels[neighbor] = id;
+			}
+		}
+
 		while (queue.length > 0) {
 			const q = queue.shift();
-			if (labels[q] === -1) {
-				labels[q] = id;
-			}
-			if (labels[q] !== 0) continue;
-			labels[q] = id;
+
+			// If it's a core point, expand to its neighbors
 			const qNeighbors = regionQuery(q);
 			if (qNeighbors.length >= minPts) {
 				for (const neighbor of qNeighbors) {
 					if (labels[neighbor] === 0 || labels[neighbor] === -1) {
+						labels[neighbor] = id; // Label immediately before pushing
 						queue.push(neighbor);
 					}
 				}
 			}
 		}
 	}
+
 
 	for (let i = 0; i < n; i++) {
 		if (labels[i] !== 0) continue;
@@ -87,13 +88,7 @@ export function segmentDbscan(segments, eps, minPts) {
 	return labels;
 }
 
-/**
- * Compute polyline-based hotspot clusters from reports with route_polyline data.
- * @param {Array<{id:number,status:string,category_id:number,route_polyline:string|null}>} reports
- * @param {number} eps
- * @param {number} minPts
- * @returns {{type:'FeatureCollection',features:Array}}
- */
+
 export function computeHotspots(reports, eps, minPts) {
 	if (!reports.length) return { type: 'FeatureCollection', features: [] };
 
